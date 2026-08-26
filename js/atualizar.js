@@ -78,10 +78,16 @@ function formatarTelefone(valor) {
     valor = valor.substring(0, 11);
   }
 
+  if (valor.length > 10) {
+    return "(" + valor.substring(0, 2) + ") " + valor.substring(2, 7) + "-" + valor.substring(7);
+  }
+
   if (valor.length > 6) {
-    valor = valor.substring(0, 5) + "-" + valor.substring(5);
-  } else if (valor.length > 2) {
-    valor = "(" + valor.substring(0, 2) + ") " + valor.substring(2);
+    return "(" + valor.substring(0, 2) + ") " + valor.substring(2, 6) + "-" + valor.substring(6);
+  }
+
+  if (valor.length > 2) {
+    return "(" + valor.substring(0, 2) + ") " + valor.substring(2);
   }
 
   return valor;
