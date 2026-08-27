@@ -5,25 +5,28 @@
 }
 
 :root {
-  --primary-color: #3498db;
-  --secondary-color: #2ecc71;
-  --danger-color: #e74c3c;
-  --warning-color: #f39c12;
-  --light-bg: #ecf0f1;
-  --dark-text: #2c3e50;
-  --border-color: #bdc3c7;
+  --primary-color: #1261a0;
+  --primary-dark: #0b3d66;
+  --secondary-color: #16866a;
+  --danger-color: #c0392b;
+  --warning-color: #c87918;
+  --page-bg: #edf3f5;
+  --light-bg: #f3f7f8;
+  --dark-text: #183247;
+  --muted-text: #607382;
+  --border-color: #c8d5dc;
 }
 
 body {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  background: linear-gradient(135deg, #edf3f5 0%, #d9e8e8 100%);
   color: var(--dark-text);
   line-height: 1.6;
   min-height: 100vh;
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 1180px;
   margin: 0 auto;
   padding: 20px;
   display: flex;
@@ -33,41 +36,54 @@ body {
 
 /* Header */
 header {
-  background: white;
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 30px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  border-bottom: 4px solid var(--primary-color);
+  border-radius: 8px;
+  padding: 16px 22px;
+  margin-bottom: 22px;
+  box-shadow: 0 8px 24px rgba(24, 50, 71, 0.09);
 }
 
 header h1 {
-  color: var(--primary-color);
-  margin-bottom: 15px;
-  font-size: 2.5rem;
+  color: var(--primary-dark);
+  margin-bottom: 12px;
+  font-size: 1.65rem;
+  letter-spacing: 0;
+}
+
+.brand-mark {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 4px 7px;
+  color: #ffffff;
+  background: var(--secondary-color);
+  border-radius: 4px;
+  font-size: 0.7em;
+  letter-spacing: 0;
+  vertical-align: 0.12em;
 }
 
 nav {
   display: flex;
-  gap: 20px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .nav-link {
-  padding: 10px 20px;
+  padding: 8px 14px;
   text-decoration: none;
   border-radius: 5px;
-  background: var(--light-bg);
+  background: transparent;
   color: var(--dark-text);
   transition: all 0.3s ease;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .nav-link:hover,
 .nav-link.active {
   background: var(--primary-color);
   color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 3px 8px rgba(18, 97, 160, 0.25);
 }
 
 /* Main Content */
@@ -78,11 +94,11 @@ main {
 .welcome,
 .form-container,
 .list-container {
-  background: white;
-  border-radius: 10px;
-  padding: 30px;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 28px;
   margin-bottom: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(24, 50, 71, 0.08);
 }
 
 .welcome-content {
@@ -96,7 +112,7 @@ main {
 }
 
 .welcome h2 {
-  color: var(--primary-color);
+  color: var(--primary-dark);
   margin-bottom: 15px;
   font-size: 2rem;
 }
@@ -115,7 +131,7 @@ main {
 }
 
 .btn {
-  padding: 12px 30px;
+  padding: 11px 22px;
   border: none;
   border-radius: 5px;
   font-size: 1rem;
@@ -132,9 +148,8 @@ main {
 }
 
 .btn-primary:hover {
-  background: #2980b9;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(52, 152, 219, 0.4);
+  background: var(--primary-dark);
+  box-shadow: 0 6px 12px rgba(18, 97, 160, 0.25);
 }
 
 .btn-secondary {
@@ -143,9 +158,8 @@ main {
 }
 
 .btn-secondary:hover {
-  background: #27ae60;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(46, 204, 113, 0.4);
+  background: #0f6b54;
+  box-shadow: 0 6px 12px rgba(22, 134, 106, 0.25);
 }
 
 .btn-danger {
@@ -172,15 +186,15 @@ main {
 
 /* Features Grid */
 .features {
-  background: white;
+  background: #ffffff;
   border-radius: 10px;
   padding: 30px;
   margin-bottom: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(24, 50, 71, 0.08);
 }
 
 .features h3 {
-  color: var(--primary-color);
+  color: var(--primary-dark);
   margin-bottom: 25px;
   text-align: center;
   font-size: 1.8rem;
@@ -204,7 +218,7 @@ main {
 .feature-card:hover {
   border-color: var(--primary-color);
   transform: translateY(-5px);
-  box-shadow: 0 8px 15px rgba(52, 152, 219, 0.3);
+  box-shadow: 0 8px 15px rgba(18, 97, 160, 0.18);
 }
 
 .feature-icon {
@@ -235,6 +249,13 @@ main {
   color: var(--dark-text);
 }
 
+.field-help {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 0.85rem;
+}
+
 .form-group input,
 .form-group textarea {
   width: 100%;
@@ -251,6 +272,53 @@ main {
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.search-bar {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  width: 100%;
+  margin: 20px 0;
+  padding: 16px;
+  background: var(--light-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.search-bar > div {
+  width: 100%;
+  min-width: 0;
+}
+
+.search-bar label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.search-bar input {
+  display: block;
+  width: min(100%, 420px);
+  padding: 11px 12px;
+  border: 2px solid var(--border-color);
+  border-radius: 5px;
+  font: inherit;
+}
+
+.search-bar input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.list-summary {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 8px 12px;
+  color: var(--primary-dark);
+  background: #e3f0f4;
+  border-radius: 5px;
+  font-size: 0.9rem;
 }
 
 .form-group textarea {
@@ -320,6 +388,13 @@ table tbody tr:nth-child(even) {
   font-size: 1.1rem;
 }
 
+.no-results {
+  display: none;
+  padding: 24px;
+  color: var(--muted-text);
+  text-align: center;
+}
+
 /* Alert Messages */
 .alert {
   padding: 15px 20px;
@@ -354,13 +429,13 @@ table tbody tr:nth-child(even) {
 
 /* Footer */
 footer {
-  background: white;
+  background: #ffffff;
   text-align: center;
   padding: 20px;
   border-radius: 10px;
   margin-top: 20px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  color: #666;
+  box-shadow: 0 8px 24px rgba(24, 50, 71, 0.08);
+  color: var(--muted-text);
 }
 
 /* Responsive Design */
@@ -375,6 +450,26 @@ footer {
 
   .nav-link {
     text-align: center;
+  }
+
+  header {
+    padding: 14px;
+  }
+
+  .welcome,
+  .form-container,
+  .list-container,
+  .features {
+    padding: 20px;
+  }
+
+  .search-bar {
+    display: block;
+    padding: 14px;
+  }
+
+  .search-bar input {
+    width: 100%;
   }
 
   .actions {
