@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="container">
         <header>
-            <h1>📋 Sistema de Gerenciamento de Clientes</h1>
+            <h1><span class="brand-mark">CRM</span> Gestão de Clientes</h1>
             <nav>
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="cadastro.php" class="nav-link active">Cadastrar Cliente</a>
@@ -60,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             placeholder="Digite o nome completo" 
                             required
                         >
+                        <small class="field-help">Informe nome e sobrenome, com pelo menos 3 caracteres.</small>
                     </div>
 
                     <div class="form-group">
@@ -71,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             placeholder="Digite o email" 
                             required
                         >
+                        <small class="field-help">Usaremos este email para identificar o cadastro.</small>
                     </div>
 
                     <div class="form-group">
@@ -79,8 +81,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             type="tel" 
                             id="telefone" 
                             name="telefone" 
-                            placeholder="Digite o telefone (opcional)"
+                            placeholder="(11) 99999-9999"
+                            inputmode="numeric"
+                            autocomplete="tel"
                         >
+                        <small class="field-help">Opcional. Digite apenas números; a formatação será aplicada automaticamente.</small>
                     </div>
 
                     <div class="form-actions">
