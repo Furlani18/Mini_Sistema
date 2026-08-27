@@ -15,7 +15,7 @@ $clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE
 <body>
     <div class="container">
         <header>
-            <h1>📋 Sistema de Gerenciamento de Clientes</h1>
+            <h1><span class="brand-mark">CRM</span> Gestão de Clientes</h1>
             <nav>
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="cadastro.php" class="nav-link">Cadastrar Cliente</a>
@@ -29,6 +29,13 @@ $clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE
 
                 <div class="actions" style="margin-bottom: 20px;">
                     <a href="cadastro.php" class="btn btn-primary">➕ Novo Cliente</a>
+                </div>
+
+                <div class="search-bar">
+                    <div>
+                        <label for="buscaClientes">Buscar cliente</label>
+                        <input type="search" id="buscaClientes" placeholder="Nome, email ou telefone" autocomplete="off">
+                    </div>
                 </div>
 
                 <?php if (empty($clientes)): ?>
@@ -50,7 +57,7 @@ $clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE
                             </thead>
                             <tbody>
                                 <?php foreach ($clientes as $cliente): ?>
-                                    <tr>
+                                    <tr data-cliente-row data-search="<?php echo htmlspecialchars(strtolower($cliente['nome'] . ' ' . $cliente['email'] . ' ' . ($cliente['telefone'] ?? ''))); ?>">
                                         <td><strong><?php echo $cliente['id']; ?></strong></td>
                                         <td><?php echo htmlspecialchars($cliente['nome']); ?></td>
                                         <td><?php echo htmlspecialchars($cliente['email']); ?></td>
@@ -66,7 +73,7 @@ $clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE
                             </tbody>
                         </table>
                     </div>
-                    <p style="margin-top: 15px; color: #666; text-align: center;">
+                    <p class="list-summary" id="resultadoBusca">
                         <strong>Total de clientes: <?php echo count($clientes); ?></strong>
                     </p>
                 <?php endif; ?>
@@ -77,5 +84,6 @@ $clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE
             <p>&copy; 2024 Sistema de Gerenciamento de Clientes. Todos os direitos reservados.</p>
         </footer>
     </div>
+    <script src="js/clientes.js"></script>
 </body>
 </html>
