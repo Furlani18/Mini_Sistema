@@ -1,4 +1,5 @@
 <?php
+require_once 'auth.php';
 require_once 'conexao.php';
 
 // Processar formulário
@@ -13,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mensagem = 'Nome e Email são obrigatórios!';
         $tipo_mensagem = 'error';
     } else {
-        $stmt = $pdo->prepare('INSERT INTO cliente (NOME, EMAIL, TELEFONE) VALUES (?, ?, ?)');
+        $stmt = $pdo->prepare('INSERT INTO usuarios (NOME, EMAIL, TELEFONE) VALUES (?, ?, ?)');
         $stmt->execute([$nome, $email, $telefone]);
         $mensagem = 'Cliente cadastrado com sucesso!';
         $tipo_mensagem = 'success';
@@ -32,9 +33,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="container">
         <header>
-            <h1><span class="brand-mark">CRM</span> Gestão de Clientes</h1>
+            <div class="header-top">
+                <h1><span class="brand-mark">CRM</span> Gestão de Clientes</h1>
+                <div class="user-bar">
+                    <span class="user-name">👤 <?php echo htmlspecialchars($_SESSION['usuario_nome']); ?></span>
+                    <a href="logout.php" class="btn btn-secondary btn-sm">🚪 Sair</a>
+                </div>
+            </div>
             <nav>
-                <a href="index.html" class="nav-link">Home</a>
+                <a href="index.php" class="nav-link">Home</a>
                 <a href="cadastro.php" class="nav-link active">Cadastrar Cliente</a>
                 <a href="clientes.php" class="nav-link">Listar Clientes</a>
             </nav>
