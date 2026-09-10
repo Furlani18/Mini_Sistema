@@ -1,7 +1,8 @@
 <?php
+require_once 'auth.php';
 require_once 'conexao.php';
 
-$clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE AS telefone FROM cliente ORDER BY ID DESC')->fetchAll();
+$clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE AS telefone FROM usuarios ORDER BY ID DESC')->fetchAll();
 ?>
 
 <!DOCTYPE html>
@@ -15,9 +16,15 @@ $clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE
 <body>
     <div class="container">
         <header>
-            <h1><span class="brand-mark">CRM</span> Gestão de Clientes</h1>
+            <div class="header-top">
+                <h1><span class="brand-mark">CRM</span> Gestão de Clientes</h1>
+                <div class="user-bar">
+                    <span class="user-name">👤 <?php echo htmlspecialchars($_SESSION['usuario_nome']); ?></span>
+                    <a href="logout.php" class="btn btn-secondary btn-sm">🚪 Sair</a>
+                </div>
+            </div>
             <nav>
-                <a href="index.html" class="nav-link">Home</a>
+                <a href="index.php" class="nav-link">Home</a>
                 <a href="cadastro.php" class="nav-link">Cadastrar Cliente</a>
                 <a href="clientes.php" class="nav-link active">Listar Clientes</a>
             </nav>
