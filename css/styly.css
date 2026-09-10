@@ -51,6 +51,35 @@ header h1 {
   letter-spacing: 0;
 }
 
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-top h1 {
+  margin-bottom: 0;
+}
+
+.user-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.user-name {
+  font-weight: 600;
+  color: var(--muted-text);
+}
+
+.btn-sm {
+  padding: 7px 14px;
+  font-size: 0.85rem;
+}
+
 .brand-mark {
   display: inline-block;
   margin-right: 8px;
@@ -438,6 +467,65 @@ footer {
   color: var(--muted-text);
 }
 
+/* Login Page */
+.login-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.login-wrapper {
+  width: 100%;
+  max-width: 420px;
+}
+
+.login-card {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 36px 32px;
+  box-shadow: 0 12px 32px rgba(24, 50, 71, 0.14);
+  border-top: 4px solid var(--primary-color);
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.login-brand .brand-mark {
+  font-size: 0.8em;
+}
+
+.login-brand h1 {
+  display: inline;
+  color: var(--primary-dark);
+  font-size: 1.5rem;
+}
+
+.login-subtitle {
+  text-align: center;
+  color: var(--muted-text);
+  margin-bottom: 24px;
+  font-size: 0.95rem;
+}
+
+.login-actions {
+  margin-top: 24px;
+}
+
+.login-actions .btn {
+  width: 100%;
+}
+
+.login-hint {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--muted-text);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   header h1 {
@@ -446,6 +534,16 @@ footer {
 
   nav {
     flex-direction: column;
+  }
+
+  .header-top {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .user-bar {
+    justify-content: center;
   }
 
   .nav-link {
