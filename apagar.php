@@ -1,4 +1,5 @@
 <?php
+require_once 'auth.php';
 require_once 'conexao.php';
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -6,12 +7,12 @@ $mensagem = '';
 $tipo_mensagem = '';
 $cliente_encontrado = false;
 
-$stmt = $pdo->prepare('SELECT NOME FROM cliente WHERE ID = ?');
+$stmt = $pdo->prepare('SELECT NOME FROM usuarios WHERE ID = ?');
 $stmt->execute([$id]);
 $cliente = $stmt->fetch();
 
 if ($cliente) {
-    $delete = $pdo->prepare('DELETE FROM cliente WHERE ID = ?');
+    $delete = $pdo->prepare('DELETE FROM clientes WHERE ID = ?');
     $delete->execute([$id]);
     $cliente_encontrado = true;
     $nome_cliente = $cliente['NOME'];
@@ -40,9 +41,15 @@ header("Refresh: 2; url=clientes.php");
 <body>
     <div class="container">
         <header>
-            <h1>📋 Sistema de Gerenciamento de Clientes</h1>
+            <div class="header-top">
+                <h1>📋 Sistema de Gerenciamento de Clientes</h1>
+                <div class="user-bar">
+                    <span class="user-name">👤 <?php echo htmlspecialchars($_SESSION['usuario_nome']); ?></span>
+                    <a href="logout.php" class="btn btn-secondary btn-sm">🚪 Sair</a>
+                </div>
+            </div>
             <nav>
-                <a href="index.html" class="nav-link">Home</a>
+                <a href="index.php" class="nav-link">Home</a>
                 <a href="cadastro.php" class="nav-link">Cadastrar Cliente</a>
                 <a href="clientes.php" class="nav-link">Listar Clientes</a>
             </nav>
