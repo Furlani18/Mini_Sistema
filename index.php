@@ -1,3 +1,7 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/auth.php';
+?>
 <!doctype html>
 <html lang="pt-BR">
   <head>
@@ -9,9 +13,15 @@
   <body>
     <div class="container">
       <header>
+        <div class="header-top">
           <h1><span class="brand-mark">CRM</span> Gestão de Clientes</h1>
+          <div class="user-bar">
+            <span class="user-name">👤 <?php echo htmlspecialchars($_SESSION['usuario_nome']); ?></span>
+            <a href="logout.php" class="btn btn-secondary btn-sm">🚪 Sair</a>
+          </div>
+        </div>
         <nav>
-          <a href="index.html" class="nav-link active">Home</a>
+          <a href="index.php" class="nav-link active">Home</a>
           <a href="cadastro.php" class="nav-link">Cadastrar Cliente</a>
           <a href="clientes.php" class="nav-link">Listar Clientes</a>
         </nav>
