@@ -51,26 +51,26 @@ require_once __DIR__ . '/auth.php';
         <section class="features">
           <h3>Funcionalidades</h3>
           <div class="features-grid">
-            <div class="feature-card">
+            <a href="cadastro.php" class="feature-card">
               <span class="feature-icon">➕</span>
               <h4>Cadastrar</h4>
               <p>Adicione novos clientes ao sistema</p>
-            </div>
-            <div class="feature-card">
+            </a>
+            <a href="clientes.php" class="feature-card">
               <span class="feature-icon">📋</span>
               <h4>Listar</h4>
               <p>Visualize todos os clientes cadastrados</p>
-            </div>
-            <div class="feature-card">
+            </a>
+            <a href="clientes.php" class="feature-card" title="Escolha um cliente na lista para atualizar">
               <span class="feature-icon">✏️</span>
               <h4>Atualizar</h4>
               <p>Modifique informações dos clientes</p>
-            </div>
-            <div class="feature-card">
+            </a>
+            <a href="clientes.php" class="feature-card" title="Escolha um cliente na lista para apagar">
               <span class="feature-icon">🗑️</span>
               <h4>Apagar</h4>
               <p>Remova clientes do sistema</p>
-            </div>
+            </a>
           </div>
         </section>
       </main>

@@ -242,6 +242,10 @@ main {
   text-align: center;
   transition: all 0.3s ease;
   border: 2px solid transparent;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
 }
 
 .feature-card:hover {
