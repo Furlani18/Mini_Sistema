@@ -40,20 +40,7 @@ header("Refresh: 2; url=clientes.php");
 </head>
 <body>
     <div class="container">
-        <header>
-            <div class="header-top">
-                <h1>📋 Sistema de Gerenciamento de Clientes</h1>
-                <div class="user-bar">
-                    <span class="user-name">👤 <?php echo htmlspecialchars($_SESSION['usuario_nome']); ?></span>
-                    <a href="logout.php" class="btn btn-secondary btn-sm">🚪 Sair</a>
-                </div>
-            </div>
-            <nav>
-                <a href="index.php" class="nav-link">Home</a>
-                <a href="cadastro.php" class="nav-link">Cadastrar Cliente</a>
-                <a href="clientes.php" class="nav-link">Listar Clientes</a>
-            </nav>
-        </header>
+        <?php $breadcrumb = ['Clientes' => 'clientes.php', 'Apagar Cliente' => null]; include __DIR__ . '/header.php'; ?>
 
         <main>
             <div class="list-container">
