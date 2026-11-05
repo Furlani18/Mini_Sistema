@@ -7,7 +7,7 @@ $mensagem = '';
 $tipo_mensagem = '';
 $cliente_encontrado = false;
 
-$stmt = $pdo->prepare('SELECT NOME FROM usuarios WHERE ID = ?');
+$stmt = $pdo->prepare('SELECT NOME FROM clientes WHERE ID = ?');
 $stmt->execute([$id]);
 $cliente = $stmt->fetch();
 

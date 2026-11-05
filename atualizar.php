@@ -7,7 +7,7 @@ $tipo_mensagem = '';
 $cliente = null;
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-$stmt = $pdo->prepare('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE AS telefone FROM usuarios WHERE ID = ?');
+$stmt = $pdo->prepare('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE AS telefone FROM clientes WHERE ID = ?');
 $stmt->execute([$id]);
 $cliente = $stmt->fetch();
 

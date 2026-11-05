@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $mensagem = 'Nome e Email são obrigatórios!';
         $tipo_mensagem = 'error';
     } else {
-        $stmt = $pdo->prepare('INSERT INTO usuarios (NOME, EMAIL, TELEFONE) VALUES (?, ?, ?)');
+        $stmt = $pdo->prepare('INSERT INTO clientes (NOME, EMAIL, TELEFONE) VALUES (?, ?, ?)');
         $stmt->execute([$nome, $email, $telefone]);
         $mensagem = 'Cliente cadastrado com sucesso!';
         $tipo_mensagem = 'success';

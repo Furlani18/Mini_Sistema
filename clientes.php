@@ -2,7 +2,7 @@
 require_once 'auth.php';
 require_once 'conexao.php';
 
-$clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE AS telefone FROM usuarios ORDER BY ID DESC')->fetchAll();
+$clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE AS telefone FROM clientes ORDER BY ID DESC')->fetchAll();
 ?>
 
 <!DOCTYPE html>

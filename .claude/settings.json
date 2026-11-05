@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/xampp/mysql/bin//**)",
+      "Bash(/c/xampp/mysql/bin/mysqladmin.exe -u root status)",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root -e \"SHOW DATABASES;\")",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root mini_sistema -e \"SHOW TABLES;\")",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root mini_sistema -e \"DESCRIBE clientes;\")",
+      "Bash(/c/xampp/php/php.exe -v)",
+      "Bash(/c/xampp/php/php.exe -r \"echo password_hash\\('admin123', PASSWORD_DEFAULT\\), PHP_EOL;\")",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root mini_sistema)",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root mini_sistema -e \"SELECT ID, NOME, EMAIL FROM usuarios;\")",
+      "Bash(git mv *)",
+      "Bash(/c/xampp/php/php.exe -S 127.0.0.1:8901)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} -> redirect: %{redirect_url}\\\\n\" http://127.0.0.1:8901/index.php)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} -> redirect: %{redirect_url}\\\\n\" http://127.0.0.1:8901/clientes.php)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://127.0.0.1:8901/login.php)",
+      "Bash(/c/xampp/php/php.exe -S 127.0.0.1:8902)",
+      "Bash(curl -s -c /tmp/cookies2.txt -d \"email=admin@sistema.com&senha=admin123\" http://127.0.0.1:8902/login.php)",
+      "Bash(curl -s -b /tmp/cookies2.txt http://127.0.0.1:8902/index.php)",
+      "Bash(kill %1)",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root mini_sistema -e \"ALTER TABLE usuarios ADD COLUMN TELEFONE VARCHAR\\(20\\) NULL AFTER EMAIL;\")",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root mini_sistema -e \"DESCRIBE usuarios;\")",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root mini_sistema -e \"UPDATE usuarios SET TELEFONE = '\\(11\\) 99999-9999' WHERE EMAIL = 'admin@sistema.com' AND TELEFONE IS NULL;\")",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root mini_sistema -e \"SELECT ID, NOME, EMAIL, TELEFONE FROM usuarios;\")",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root -e \"SELECT VERSION\\(\\);\")",
+      "Bash(/c/xampp/php/php.exe -l login.php)",
+      "Bash(/c/xampp/php/php.exe -l index.php)"
+    ]
+  }
+}
