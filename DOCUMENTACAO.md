@@ -83,12 +83,11 @@ C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < clientes.sql
 ### 3.3 Acessar
 
 - Via Apache do XAMPP: `http://localhost/mini_sistema/mini_sistema/login.php`
-- Ou via servidor embutido do PHP (na pasta do projeto):
+- Ou via servidor embutido do PHP (na pasta do projeto), acessando depois `http://localhost:8000`:
 
-  ```bash
-  php -S localhost:8000
-  ```
-  e acesse `http://localhost:8000`.
+```bash
+php -S localhost:8000
+```
 
 **Login padrão:** `admin@sistema.com` / `admin123`
 
@@ -363,13 +362,13 @@ editar/apagar não terem efeito visível.
 | `apagar.php`    | `FROM clientes`    | `DELETE FROM clientes`   |
 
 > Se você já cadastrou "clientes" na tabela `usuarios` antes da correção, eles continuam lá.
-> Para copiá-los para `clientes` (ignorando o admin):
->
-> ```sql
-> INSERT INTO clientes (NOME, EMAIL, TELEFONE)
-> SELECT NOME, EMAIL, TELEFONE FROM usuarios
-> WHERE EMAIL <> 'admin@sistema.com';
-> ```
+> Para copiá-los para `clientes` (ignorando o admin), use:
+
+```sql
+INSERT INTO clientes (NOME, EMAIL, TELEFONE)
+SELECT NOME, EMAIL, TELEFONE FROM usuarios
+WHERE EMAIL <> 'admin@sistema.com';
+```
 
 ### 10.2 Outras melhorias
 - Validar o formato do email também no servidor (`filter_var($email, FILTER_VALIDATE_EMAIL)`).
@@ -389,10 +388,10 @@ editar/apagar não terem efeito visível.
 
 > Todas as consultas consideram o banco `mini_sistema` e as tabelas descritas na [seção 6](#6-banco-de-dados).
 > Execute-as no phpMyAdmin (aba **SQL**) ou no cliente `mysql`. Antes de rodar, selecione o banco:
->
-> ```sql
-> USE mini_sistema;
-> ```
+
+```sql
+USE mini_sistema;
+```
 
 ### 11.0 Dados de exemplo
 
