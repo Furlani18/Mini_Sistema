@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/sessao.php';
 require_once __DIR__ . '/conexao.php';
+require_once __DIR__ . '/ui.php';
 
 // Se já estiver logado, vai direto para o sistema
 if (isset($_SESSION['usuario_id'])) {
@@ -55,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Sistema de Gerenciamento de Clientes</title>
-    <link rel="stylesheet" href="css/styly.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="login-body">
     <div class="login-wrapper">
@@ -67,8 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p class="login-subtitle">Entre com suas credenciais para acessar o sistema</p>
 
             <?php if (!empty($mensagem)): ?>
-                <div class="alert alert-<?php echo $tipo_mensagem; ?>">
-                    <?php echo htmlspecialchars($mensagem); ?>
+                <div class="alert alert-<?php echo $tipo_mensagem; ?>" role="alert">
+                    <?php echo icone('erro'); ?>
+                    <span><?php echo htmlspecialchars($mensagem); ?></span>
                 </div>
             <?php endif; ?>
 
@@ -100,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <div class="form-actions login-actions">
-                    <button type="submit" class="btn btn-primary">🔐 Entrar</button>
+                    <button type="submit" class="btn btn-primary"><?php echo icone('entrar'); ?> Entrar</button>
                 </div>
             </form>
 

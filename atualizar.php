@@ -1,39 +1,44 @@
 <?php
 require_once 'auth.php';
 require_once 'conexao.php';
+require_once 'ui.php';
+require_once 'validacao.php';
 
-$mensagem = '';
-$tipo_mensagem = '';
-$cliente = null;
+$erros = [];
+$toasts = [];
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 $stmt = $pdo->prepare('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE AS telefone FROM clientes WHERE ID = ?');
 $stmt->execute([$id]);
 $cliente = $stmt->fetch();
 
-// Se cliente não existe, redirecionar
+// Se cliente não existe, volta para a lista com um aviso
 if (!$cliente) {
+    flash('error', 'Cliente não encontrado.');
     header('Location: clientes.php');
     exit;
 }
 
+$valores = [
+    'nome'     => $cliente['nome'],
+    'email'    => $cliente['email'],
+    'telefone' => $cliente['telefone'] ?? '',
+];
+
 // Processar atualização
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nome = trim($_POST['nome'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $telefone = trim($_POST['telefone'] ?? '');
-    if (empty($nome) || empty($email)) {
-        $mensagem = 'Nome e Email são obrigatórios!';
-        $tipo_mensagem = 'error';
-    } else {
+    $valores = [
+        'nome'     => trim($_POST['nome'] ?? ''),
+        'email'    => trim($_POST['email'] ?? ''),
+        'telefone' => trim($_POST['telefone'] ?? ''),
+    ];
+    $erros = validar_cliente($valores['nome'], $valores['email'], $valores['telefone']);
+
+    if (!$erros) {
         $stmt = $pdo->prepare('UPDATE clientes SET NOME = ?, EMAIL = ?, TELEFONE = ? WHERE ID = ?');
-        $stmt->execute([$nome, $email, $telefone, $id]);
-        $cliente['nome'] = $nome;
-        $cliente['email'] = $email;
-        $cliente['telefone'] = $telefone;
-        
-        $mensagem = 'Cliente atualizado com sucesso!';
-        $tipo_mensagem = 'success';
+        $stmt->execute([$valores['nome'], $valores['email'], $valores['telefone'], $id]);
+        $cliente['nome'] = $valores['nome'];
+        $toasts[] = ['tipo' => 'success', 'mensagem' => 'Cliente atualizado com sucesso!'];
     }
 }
 ?>
@@ -44,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Atualizar Cliente</title>
-    <link rel="stylesheet" href="css/styly.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="container">
@@ -52,69 +57,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <main>
             <div class="form-container">
-                <h2>✏️ Atualizar Cliente ID #<?php echo $cliente['id']; ?></h2>
+                <h2 class="page-title"><?php echo icone('editar'); ?> Atualizar Cliente <span class="page-title-id">#<?php echo $cliente['id']; ?></span></h2>
 
-                <?php if (!empty($mensagem)): ?>
-                    <div class="alert alert-<?php echo $tipo_mensagem; ?>">
-                        <?php echo $mensagem; ?>
+                <?php if ($erros): ?>
+                    <div class="alert alert-error" role="alert">
+                        <?php echo icone('erro'); ?>
+                        <span>Não foi possível salvar. Corrija os campos destacados abaixo.</span>
                     </div>
                 <?php endif; ?>
 
-                <form method="POST" action="" id="formAtualizar">
-                    <div class="form-group">
-                        <label for="nome">Nome Completo *</label>
-                        <input 
-                            type="text" 
-                            id="nome" 
-                            name="nome" 
-                            value="<?php echo htmlspecialchars($cliente['nome']); ?>"
-                            placeholder="Digite o nome completo" 
-                            required
-                        >
-                        <small class="field-help">Informe nome e sobrenome, com pelo menos 3 caracteres.</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="email">Email *</label>
-                        <input 
-                            type="email" 
-                            id="email" 
-                            name="email" 
-                            value="<?php echo htmlspecialchars($cliente['email']); ?>"
-                            placeholder="Digite o email" 
-                            required
-                        >
-                        <small class="field-help">Usaremos este email para identificar o cadastro.</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="telefone">Telefone</label>
-                        <input 
-                            type="tel" 
-                            id="telefone" 
-                            name="telefone" 
-                            value="<?php echo htmlspecialchars($cliente['telefone'] ?? ''); ?>"
-                            placeholder="(11) 99999-9999"
-                            inputmode="numeric"
-                            autocomplete="tel"
-                        >
-                        <small class="field-help">Opcional. Digite apenas números; a formatação será aplicada automaticamente.</small>
-                    </div>
+                <form method="POST" action="" id="formAtualizar" data-validar novalidate>
+                    <?php include __DIR__ . '/form_cliente.php'; ?>
 
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">💾 Salvar Alterações</button>
-                        <a href="clientes.php" class="btn btn-secondary">📋 Ver Clientes</a>
-                        <a href="apagar.php?id=<?php echo $cliente['id']; ?>" class="btn btn-danger" onclick="return confirm('Tem certeza que deseja deletar este cliente?');">🗑️ Deletar Cliente</a>
+                        <button type="submit" class="btn btn-primary"><?php echo icone('salvar'); ?> Salvar Alterações</button>
+                        <a href="clientes.php" class="btn btn-outline"><?php echo icone('lista'); ?> Ver Clientes</a>
+                        <a href="apagar.php?id=<?php echo $cliente['id']; ?>"
+                           class="btn btn-danger-outline"
+                           data-confirmar-exclusao="<?php echo htmlspecialchars($cliente['nome']); ?>"><?php echo icone('lixeira'); ?> Apagar Cliente</a>
                     </div>
                 </form>
             </div>
         </main>
 
-        <footer>
-            <p>&copy; 2024 Sistema de Gerenciamento de Clientes. Todos os direitos reservados.</p>
-        </footer>
+        <?php include __DIR__ . '/footer.php'; ?>
     </div>
 
-    <script src="js/atualizar.js"></script>
+    <script src="js/formulario.js"></script>
 </body>
 </html>

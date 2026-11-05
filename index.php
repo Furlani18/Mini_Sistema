@@ -8,7 +8,7 @@ require_once __DIR__ . '/auth.php';
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sistema de Gerenciamento de Clientes</title>
-    <link rel="stylesheet" href="css/styly.css" />
+    <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
     <div class="container">
@@ -27,10 +27,8 @@ require_once __DIR__ . '/auth.php';
               Gerencie facilmente seus clientes com nosso sistema intuitivo.
             </p>
             <div class="actions">
-              <a href="cadastro.php" class="btn btn-primary">➕ Novo Cliente</a>
-              <a href="clientes.php" class="btn btn-secondary"
-                >👥 Ver Clientes</a
-              >
+              <a href="cadastro.php" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Cliente</a>
+              <a href="clientes.php" class="btn btn-secondary"><?php echo icone('usuarios'); ?> Ver Clientes</a>
             </div>
           </div>
         </section>
@@ -39,22 +37,22 @@ require_once __DIR__ . '/auth.php';
           <h3>Funcionalidades</h3>
           <div class="features-grid">
             <a href="cadastro.php" class="feature-card">
-              <span class="feature-icon">➕</span>
+              <span class="feature-icon"><?php echo icone('plus'); ?></span>
               <h4>Cadastrar</h4>
               <p>Adicione novos clientes ao sistema</p>
             </a>
             <a href="clientes.php" class="feature-card">
-              <span class="feature-icon">📋</span>
+              <span class="feature-icon"><?php echo icone('lista'); ?></span>
               <h4>Listar</h4>
               <p>Visualize todos os clientes cadastrados</p>
             </a>
             <a href="clientes.php" class="feature-card" title="Escolha um cliente na lista para atualizar">
-              <span class="feature-icon">✏️</span>
+              <span class="feature-icon feature-icon-warning"><?php echo icone('editar'); ?></span>
               <h4>Atualizar</h4>
               <p>Modifique informações dos clientes</p>
             </a>
             <a href="clientes.php" class="feature-card" title="Escolha um cliente na lista para apagar">
-              <span class="feature-icon">🗑️</span>
+              <span class="feature-icon feature-icon-danger"><?php echo icone('lixeira'); ?></span>
               <h4>Apagar</h4>
               <p>Remova clientes do sistema</p>
             </a>
@@ -62,12 +60,7 @@ require_once __DIR__ . '/auth.php';
         </section>
       </main>
 
-      <footer>
-        <p>
-          &copy; 2026 Sistema de Gerenciamento de Clientes. Todos os direitos
-          reservados.
-        </p>
-      </footer>
+      <?php include __DIR__ . '/footer.php'; ?>
     </div>
   </body>
 </html>

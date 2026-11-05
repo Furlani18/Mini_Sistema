@@ -1,23 +1,26 @@
 <?php
 require_once 'auth.php';
 require_once 'conexao.php';
+require_once 'ui.php';
+require_once 'validacao.php';
 
-// Processar formulário
-$mensagem = '';
-$tipo_mensagem = '';
+$valores = ['nome' => '', 'email' => '', 'telefone' => ''];
+$erros = [];
+$toasts = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nome = trim($_POST['nome'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $telefone = trim($_POST['telefone'] ?? '');
-    if (empty($nome) || empty($email)) {
-        $mensagem = 'Nome e Email são obrigatórios!';
-        $tipo_mensagem = 'error';
-    } else {
+    $valores = [
+        'nome'     => trim($_POST['nome'] ?? ''),
+        'email'    => trim($_POST['email'] ?? ''),
+        'telefone' => trim($_POST['telefone'] ?? ''),
+    ];
+    $erros = validar_cliente($valores['nome'], $valores['email'], $valores['telefone']);
+
+    if (!$erros) {
         $stmt = $pdo->prepare('INSERT INTO clientes (NOME, EMAIL, TELEFONE) VALUES (?, ?, ?)');
-        $stmt->execute([$nome, $email, $telefone]);
-        $mensagem = 'Cliente cadastrado com sucesso!';
-        $tipo_mensagem = 'success';
+        $stmt->execute([$valores['nome'], $valores['email'], $valores['telefone']]);
+        $toasts[] = ['tipo' => 'success', 'mensagem' => "Cliente '{$valores['nome']}' cadastrado com sucesso!"];
+        $valores = ['nome' => '', 'email' => '', 'telefone' => ''];
     }
 }
 ?>
@@ -28,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cadastrar Cliente</title>
-    <link rel="stylesheet" href="css/styly.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="container">
@@ -36,65 +39,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <main>
             <div class="form-container">
-                <h2>➕ Cadastrar Novo Cliente</h2>
+                <h2 class="page-title"><?php echo icone('usuario-mais'); ?> Cadastrar Novo Cliente</h2>
 
-                <?php if (!empty($mensagem)): ?>
-                    <div class="alert alert-<?php echo $tipo_mensagem; ?>">
-                        <?php echo $mensagem; ?>
+                <?php if ($erros): ?>
+                    <div class="alert alert-error" role="alert">
+                        <?php echo icone('erro'); ?>
+                        <span>Não foi possível cadastrar. Corrija os campos destacados abaixo.</span>
                     </div>
                 <?php endif; ?>
 
-                <form method="POST" action="" id="formCadastro">
-                    <div class="form-group">
-                        <label for="nome">Nome Completo *</label>
-                        <input 
-                            type="text" 
-                            id="nome" 
-                            name="nome" 
-                            placeholder="Digite o nome completo" 
-                            required
-                        >
-                        <small class="field-help">Informe nome e sobrenome, com pelo menos 3 caracteres.</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="email">Email *</label>
-                        <input 
-                            type="email" 
-                            id="email" 
-                            name="email" 
-                            placeholder="Digite o email" 
-                            required
-                        >
-                        <small class="field-help">Usaremos este email para identificar o cadastro.</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="telefone">Telefone</label>
-                        <input 
-                            type="tel" 
-                            id="telefone" 
-                            name="telefone" 
-                            placeholder="(11) 99999-9999"
-                            inputmode="numeric"
-                            autocomplete="tel"
-                        >
-                        <small class="field-help">Opcional. Digite apenas números; a formatação será aplicada automaticamente.</small>
-                    </div>
+                <form method="POST" action="" id="formCadastro" data-validar novalidate>
+                    <?php include __DIR__ . '/form_cliente.php'; ?>
 
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">💾 Cadastrar Cliente</button>
-                        <a href="clientes.php" class="btn btn-secondary">📋 Ver Clientes</a>
+                        <button type="submit" class="btn btn-primary"><?php echo icone('salvar'); ?> Cadastrar Cliente</button>
+                        <a href="clientes.php" class="btn btn-outline"><?php echo icone('lista'); ?> Ver Clientes</a>
                     </div>
                 </form>
             </div>
         </main>
 
-        <footer>
-            <p>&copy; 2024 Sistema de Gerenciamento de Clientes. Todos os direitos reservados.</p>
-        </footer>
+        <?php include __DIR__ . '/footer.php'; ?>
     </div>
 
-    <script src="js/cadastro.js"></script>
+    <script src="js/formulario.js"></script>
 </body>
 </html>

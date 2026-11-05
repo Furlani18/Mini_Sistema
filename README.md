@@ -24,12 +24,18 @@ mini_sistema/
 ├── cadastro.php     # Formulário de cadastro (requer login)
 ├── clientes.php     # Lista de clientes (requer login)
 ├── atualizar.php    # Formulário de atualização (requer login)
-├── apagar.php       # Página de exclusão (requer login)
+├── apagar.php       # Exclui o cliente e volta para a lista (requer login)
+├── header.php       # Cabeçalho, menu e breadcrumb compartilhados
+├── footer.php       # Rodapé, toasts e modal de exclusão compartilhados
+├── form_cliente.php # Campos do formulário de cliente (cadastro e atualização)
+├── validacao.php    # Regras de validação do cliente (servidor)
+├── ui.php           # Ícones SVG, iniciais do avatar e mensagens flash
 ├── css/
-│   └── styly.css    # Estilos CSS (inclui tela de login)
+│   └── style.css    # Estilos CSS (inclui tela de login)
 ├── js/
-│   ├── cadastro.js  # Validações de cadastro
-│   └── atualizar.js # Validações de atualização
+│   ├── app.js        # Toasts e modal de confirmação de exclusão
+│   ├── formulario.js # Validação e máscara dos formulários de cliente
+│   └── clientes.js   # Busca instantânea na lista
 ├── imagens/         # Pasta para armazenar imagens
 ├── conexao.php      # Conexão com o banco mini_sistema
 ├── usuarios.sql     # Script de criação da tabela `usuarios` + usuário padrão

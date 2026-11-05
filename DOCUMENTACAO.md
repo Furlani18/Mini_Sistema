@@ -117,14 +117,19 @@ mini_sistema/
 ├── cadastro.php     # Formulário de cadastro de cliente (INSERT)
 ├── clientes.php     # Listagem + busca de clientes (SELECT)
 ├── atualizar.php    # Edição de cliente (SELECT + UPDATE)
-├── apagar.php       # Exclusão de cliente (SELECT + DELETE)
+├── apagar.php       # Exclusão de cliente (SELECT + DELETE) e volta para a lista
+├── header.php       # Cabeçalho, menu e breadcrumb compartilhados
+├── footer.php       # Rodapé, toasts e modal de exclusão compartilhados
+├── form_cliente.php # Campos do formulário de cliente (cadastro e atualização)
+├── validacao.php    # validar_cliente(): regras de validação no servidor
+├── ui.php           # icone(), iniciais(), flash() e flash_pegar()
 ├── usuarios.sql     # Script da tabela `usuarios` + usuário admin
 ├── clientes.sql     # Script da tabela `clientes`
 ├── css/
-│   └── styly.css    # Estilo de todas as páginas
+│   └── style.css    # Estilo de todas as páginas
 ├── js/
-│   ├── cadastro.js  # Validação/máscara do formulário de cadastro
-│   ├── atualizar.js # Validação/máscara do formulário de atualização
+│   ├── app.js        # Toasts e modal de confirmação de exclusão
+│   ├── formulario.js # Validação/máscara dos formulários de cliente
 │   └── clientes.js  # Busca instantânea na tabela de clientes
 ├── imagens/
 │   └── bem-vindo.jpeg
@@ -173,12 +178,12 @@ redirecionamento para sites externos (*open redirect*).
 ### 5.3 Fluxo do CRUD
 
 ```
-cadastro.php  ──POST──► INSERT  ──► mensagem de sucesso
+cadastro.php  ──POST──► validar_cliente() ──► INSERT ──► toast de sucesso
 clientes.php  ──GET───► SELECT ... ORDER BY ID DESC ──► tabela + busca JS
    ├── ✏️ Editar  → atualizar.php?id=N ──GET──► SELECT por ID
    │                                   ──POST─► UPDATE por ID
-   └── 🗑️ Deletar → confirm() JS → apagar.php?id=N ──► SELECT + DELETE
-                                                    └► Refresh 2s → clientes.php
+   └── Apagar → modal de confirmação → apagar.php?id=N ──► SELECT + DELETE
+                                                    └► flash() + redireciona → clientes.php (toast)
 ```
 
 ### 5.4 Variáveis de sessão
@@ -280,15 +285,18 @@ executa um `INSERT` com *prepared statement*.
 ### [clientes.php](clientes.php)
 Executa um `SELECT` ordenado por `ID DESC` (mais recentes primeiro) e monta a tabela. Cada linha
 recebe o atributo `data-search` (nome + email + telefone em minúsculas) usado pela busca em
-[js/clientes.js](js/clientes.js). Mostra o total de registros no rodapé da tabela.
+[js/clientes.js](js/clientes.js). Mostra o total de registros ao lado da busca. Cada cliente tem
+um avatar com as iniciais (`iniciais()` em `ui.php`) e botões só com ícone para editar/apagar.
+Em telas pequenas a tabela vira uma lista de cartões.
 
 ### [atualizar.php](atualizar.php)
 - Lê `id` da URL (convertido com `(int)`), busca o registro e redireciona para a lista se não existir.
-- No `POST`, valida e executa o `UPDATE`, atualizando também os valores exibidos no formulário.
+- No `POST`, valida com `validar_cliente()` e executa o `UPDATE`; erros aparecem embaixo de cada campo.
 
 ### [apagar.php](apagar.php)
-Busca o registro pelo `id`, executa o `DELETE`, mostra uma mensagem e redireciona para a lista
-após 2 segundos (`header("Refresh: 2; url=clientes.php")`).
+Busca o registro pelo `id`, executa o `DELETE`, guarda a mensagem com `flash()` e redireciona
+imediatamente para a lista, onde a mensagem aparece como toast. A confirmação acontece antes,
+no modal aberto por `js/app.js`.
 
 ### [usuarios.sql](usuarios.sql)
 Cria a tabela `usuarios`, garante a coluna `TELEFONE` (sintaxe `ADD COLUMN IF NOT EXISTS`,
@@ -303,24 +311,29 @@ criadas anteriormente sem ela.
 
 ## 8. Front-end (CSS e JavaScript)
 
-### 8.1 [css/styly.css](css/styly.css)
-Folha de estilo única para todas as telas: cabeçalho com navegação, cards, formulários,
-tabela responsiva (`.table-responsive`), alertas (`.alert-success` / `.alert-error`), botões
-(`.btn-primary`, `.btn-secondary`, `.btn-warning`, `.btn-danger`, `.btn-sm`) e o layout da tela
-de login (`.login-body`, `.login-card`).
+### 8.1 [css/style.css](css/style.css)
+Folha de estilo única para todas as telas, com fonte Arial. As cores, espaçamentos (`--space-1`
+a `--space-6`), raios (`--radius-*`) e sombras (`--shadow-*`) ficam em variáveis no `:root`.
+Inclui cabeçalho/breadcrumb, cards, formulários com erro por campo (`.has-error`), tabela que
+vira cartões no celular, alertas, toasts (`.toast`), modal (`.modal`), botões (`.btn-primary`,
+`.btn-secondary`, `.btn-outline`, `.btn-danger`, `.btn-danger-outline`, `.btn-icon`, `.btn-sm`)
+e a tela de login.
 
-### 8.2 [js/cadastro.js](js/cadastro.js) e [js/atualizar.js](js/atualizar.js)
-Comportamento praticamente idêntico:
+### 8.2 [js/formulario.js](js/formulario.js)
+Usado por qualquer `<form data-validar>` (cadastro e atualização). As regras são as mesmas de
+`validacao.php`:
 
 | Função                | O que faz                                                                 |
 |-----------------------|---------------------------------------------------------------------------|
-| validação no `blur`   | Nome com menos de 3 caracteres ou email inválido → borda vermelha + dica  |
-| `isValidEmail()`      | Regex simples `^[^\s@]+@[^\s@]+\.[^\s@]+$`                                |
+| validação no `blur`   | Valida o campo e mostra o erro embaixo dele (`.has-error`)                |
+| validação no `input`  | Depois de um erro, revalida enquanto o usuário digita                     |
 | `formatarTelefone()`  | Máscara automática: `(11) 9999-9999` ou `(11) 99999-9999` (máx. 11 dígitos) |
-| `showTooltip()`       | Cria/substitui a mensagem de erro abaixo do campo                         |
-| validação no `submit` | Bloqueia o envio se nome ou email forem inválidos                         |
+| validação no `submit` | Bloqueia o envio e foca o primeiro campo inválido                         |
 
-`atualizar.js` também adiciona a classe `modificado` ao formulário quando algum campo muda.
+### 8.2.1 [js/app.js](js/app.js)
+Carregado em todas as páginas internas (via `footer.php`). Fecha os toasts sozinho após 4,5 s
+(pausa com o mouse em cima) e abre o modal de confirmação para links com
+`data-confirmar-exclusao`.
 
 ### 8.3 [js/clientes.js](js/clientes.js)
 Busca instantânea (sem recarregar a página): a cada tecla, esconde as linhas cujo
@@ -338,7 +351,7 @@ Busca instantânea (sem recarregar a página): a cada tecla, esconde as linhas c
 | Escape de saída (anti XSS)               | `htmlspecialchars()` nos dados exibidos |
 | Validação do `redirect` (anti open redirect) | `login.php` (regex)                 |
 | Conversão do `id` para inteiro           | `atualizar.php`, `apagar.php`          |
-| Confirmação antes de excluir             | `confirm()` nos links de exclusão      |
+| Confirmação antes de excluir             | Modal em `js/app.js` (`data-confirmar-exclusao`) |
 
 ---
 
@@ -374,13 +387,8 @@ WHERE EMAIL <> 'admin@sistema.com';
 - Validar o formato do email também no servidor (`filter_var($email, FILTER_VALIDATE_EMAIL)`).
 - Exclusão via `GET` pode ser disparada por um link externo (CSRF). O ideal é excluir via
   `POST` com um token CSRF.
-- `cadastro.php`, `atualizar.php` e `apagar.php` imprimem `$mensagem` sem `htmlspecialchars()`
-  (em `apagar.php` a mensagem contém o nome do cliente → risco de XSS armazenado).
 - Tratar email duplicado (capturar `PDOException` código `23000`).
 - Remover a dica de credenciais padrão da tela de login em produção.
-- Ano do rodapé divergente (2024 × 2026) e cabeçalho diferente em `apagar.php`.
-- Extrair o cabeçalho/rodapé repetidos para um `header.php`/`footer.php`.
-- `cadastro.js` e `atualizar.js` duplicam funções; poderiam compartilhar um `validacao.js`.
 
 ---
 
