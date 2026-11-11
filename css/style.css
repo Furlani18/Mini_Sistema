@@ -979,7 +979,7 @@ footer {
     justify-content: center;
   }
 
-  nav {
+  header nav {
     flex-direction: column;
   }
 
