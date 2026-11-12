@@ -82,8 +82,11 @@ body {
   padding: var(--space-6) var(--space-6) var(--space-4);
 }
 
-/* Conteúdo centralizado na área à direita do menu */
-.container > :not(.sidebar) {
+/* Conteúdo centralizado na área à direita do menu
+   (só as áreas de conteúdo: o modal e os avisos têm posição própria) */
+.container > main,
+.container > footer,
+.container > .breadcrumb {
   width: 100%;
   max-width: 1180px;
   margin-left: auto;

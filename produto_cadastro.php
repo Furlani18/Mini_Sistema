@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
 
     // Aceita "1.234,50", "1234,50" e "1234.50"
-    $precoTexto = str_contains($valores['preco'], ',')
+    $precoTexto = strpos($valores['preco'], ',') !== false
         ? str_replace(['.', ','], ['', '.'], $valores['preco'])
         : $valores['preco'];
 

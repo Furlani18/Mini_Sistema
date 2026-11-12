@@ -47,13 +47,14 @@ $breadcrumb = $breadcrumb ?? [];
     </a>
 
     <nav class="sidebar-nav" aria-label="Menu principal">
-        <?php foreach ($menu as $grupo => $itens): ?>
-            <p class="nav-grupo"><?php echo $grupo; ?></p>
-            <?php foreach ($itens as $href => [$iconeMenu, $rotulo]): ?>
-                <?php $ativo = $href === $secaoAtiva; ?>
-                <a href="<?php echo $href; ?>"
-                   class="nav-link<?php echo $ativo ? ' active' : ''; ?>"
-                   <?php echo $ativo ? 'aria-current="page"' : ''; ?>><?php echo icone($iconeMenu); ?> <?php echo $rotulo; ?></a>
+        <?php // Nomes com prefixo "menu" para não sobrescrever variáveis da página que inclui este arquivo ?>
+        <?php foreach ($menu as $menuGrupo => $menuLinks): ?>
+            <p class="nav-grupo"><?php echo $menuGrupo; ?></p>
+            <?php foreach ($menuLinks as $menuHref => [$menuIcone, $menuRotulo]): ?>
+                <?php $menuAtivo = $menuHref === $secaoAtiva; ?>
+                <a href="<?php echo $menuHref; ?>"
+                   class="nav-link<?php echo $menuAtivo ? ' active' : ''; ?>"
+                   <?php echo $menuAtivo ? 'aria-current="page"' : ''; ?>><?php echo icone($menuIcone); ?> <?php echo $menuRotulo; ?></a>
             <?php endforeach; ?>
         <?php endforeach; ?>
     </nav>
@@ -71,12 +72,12 @@ $breadcrumb = $breadcrumb ?? [];
 <?php if ($breadcrumb): ?>
 <nav class="breadcrumb" aria-label="Você está em">
     <a href="index.php">Painel</a>
-    <?php foreach ($breadcrumb as $rotulo => $href): ?>
+    <?php foreach ($breadcrumb as $menuRotulo => $menuHref): ?>
         <span class="breadcrumb-sep" aria-hidden="true">›</span>
-        <?php if ($href): ?>
-            <a href="<?php echo htmlspecialchars($href); ?>"><?php echo htmlspecialchars($rotulo); ?></a>
+        <?php if ($menuHref): ?>
+            <a href="<?php echo htmlspecialchars($menuHref); ?>"><?php echo htmlspecialchars($menuRotulo); ?></a>
         <?php else: ?>
-            <span aria-current="page"><?php echo htmlspecialchars($rotulo); ?></span>
+            <span aria-current="page"><?php echo htmlspecialchars($menuRotulo); ?></span>
         <?php endif; ?>
     <?php endforeach; ?>
 </nav>

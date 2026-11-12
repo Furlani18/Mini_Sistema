@@ -11,6 +11,10 @@
 --   produtos  1 ── N  itens_pedido  (itens_pedido.PRODUTO_ID → produtos.ID)
 --   pedidos   N ── N  produtos      (através da tabela associativa itens_pedido)
 
+-- Garante que os acentos deste arquivo sejam lidos como UTF-8 (o cliente mysql do Windows
+-- usa outro charset por padrão e gravaria "mecÃ¢nico" no lugar de "mecânico").
+SET NAMES utf8mb4;
+
 -- Chaves estrangeiras só funcionam no motor InnoDB: garante isso nas tabelas antigas.
 ALTER TABLE usuarios ENGINE = InnoDB;
 ALTER TABLE clientes ENGINE = InnoDB;
