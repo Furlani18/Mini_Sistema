@@ -24,39 +24,55 @@ require_once __DIR__ . '/auth.php';
             />
             <h2>Bem-vindo ao Sistema</h2>
             <p>
-              Gerencie facilmente seus clientes com nosso sistema intuitivo.
+              Gerencie facilmente seus clientes, produtos e pedidos com nosso sistema intuitivo.
             </p>
             <div class="actions">
               <a href="cadastro.php" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Cliente</a>
-              <a href="clientes.php" class="btn btn-secondary"><?php echo icone('usuarios'); ?> Ver Clientes</a>
+              <a href="pedido_novo.php" class="btn btn-primary"><?php echo icone('carrinho'); ?> Novo Pedido</a>
+              <a href="relacionamentos.php" class="btn btn-secondary"><?php echo icone('banco'); ?> Ver Relacionamentos</a>
             </div>
           </div>
         </section>
 
+        <?php
+        // Cards de funcionalidades: [link, ícone, classe extra do ícone, título, descrição, dica]
+        $grupos = [
+            ['usuarios', 'Clientes', [
+                ['cadastro.php', 'plus', '', 'Cadastrar Cliente', 'Adicione novos clientes ao sistema', ''],
+                ['clientes.php', 'lista', '', 'Listar Clientes', 'Visualize e busque os clientes cadastrados', ''],
+                ['clientes.php', 'editar', 'feature-icon-warning', 'Atualizar Cliente', 'Modifique informações dos clientes', 'Escolha um cliente na lista para atualizar'],
+                ['clientes.php', 'lixeira', 'feature-icon-danger', 'Apagar Cliente', 'Remova clientes do sistema', 'Escolha um cliente na lista para apagar'],
+            ]],
+            ['pacote', 'Produtos', [
+                ['produto_cadastro.php', 'plus', '', 'Cadastrar Produto', 'Adicione produtos com preço e estoque', ''],
+                ['produtos.php', 'lista', '', 'Listar Produtos', 'Visualize e busque os produtos cadastrados', ''],
+                ['produtos.php', 'editar', 'feature-icon-warning', 'Atualizar Produto', 'Altere preço, estoque e descrição', 'Escolha um produto na lista para atualizar'],
+                ['produtos.php', 'lixeira', 'feature-icon-danger', 'Apagar Produto', 'Remova produtos que nunca foram vendidos', 'Escolha um produto na lista para apagar'],
+            ]],
+            ['carrinho', 'Pedidos', [
+                ['pedido_novo.php', 'plus', '', 'Cadastrar Pedido', 'Registre um pedido com vários produtos', ''],
+                ['pedidos.php', 'lista', '', 'Listar Pedidos', 'Visualize e busque os pedidos registrados', ''],
+                ['pedidos.php', 'editar', 'feature-icon-warning', 'Atualizar Pedido', 'Altere o status do pedido (pago, enviado...)', 'Abra um pedido na lista para mudar o status'],
+                ['pedidos.php', 'lixeira', 'feature-icon-danger', 'Apagar Pedido', 'Remova pedidos e seus itens', 'Escolha um pedido na lista para apagar'],
+            ]],
+        ];
+        ?>
         <section class="features">
           <h3>Funcionalidades</h3>
-          <div class="features-grid">
-            <a href="cadastro.php" class="feature-card">
-              <span class="feature-icon"><?php echo icone('plus'); ?></span>
-              <h4>Cadastrar</h4>
-              <p>Adicione novos clientes ao sistema</p>
-            </a>
-            <a href="clientes.php" class="feature-card">
-              <span class="feature-icon"><?php echo icone('lista'); ?></span>
-              <h4>Listar</h4>
-              <p>Visualize todos os clientes cadastrados</p>
-            </a>
-            <a href="clientes.php" class="feature-card" title="Escolha um cliente na lista para atualizar">
-              <span class="feature-icon feature-icon-warning"><?php echo icone('editar'); ?></span>
-              <h4>Atualizar</h4>
-              <p>Modifique informações dos clientes</p>
-            </a>
-            <a href="clientes.php" class="feature-card" title="Escolha um cliente na lista para apagar">
-              <span class="feature-icon feature-icon-danger"><?php echo icone('lixeira'); ?></span>
-              <h4>Apagar</h4>
-              <p>Remova clientes do sistema</p>
-            </a>
-          </div>
+          <?php foreach ($grupos as [$iconeGrupo, $tituloGrupo, $cards]): ?>
+            <div class="features-group">
+              <h4 class="features-subtitle"><?php echo icone($iconeGrupo); ?> <?php echo $tituloGrupo; ?></h4>
+              <div class="features-grid">
+                <?php foreach ($cards as [$href, $iconeCard, $classeIcone, $titulo, $descricao, $dica]): ?>
+                  <a href="<?php echo $href; ?>" class="feature-card"<?php echo $dica ? ' title="' . $dica . '"' : ''; ?>>
+                    <span class="feature-icon <?php echo $classeIcone; ?>"><?php echo icone($iconeCard); ?></span>
+                    <h4><?php echo $titulo; ?></h4>
+                    <p><?php echo $descricao; ?></p>
+                  </a>
+                <?php endforeach; ?>
+              </div>
+            </div>
+          <?php endforeach; ?>
         </section>
       </main>
 

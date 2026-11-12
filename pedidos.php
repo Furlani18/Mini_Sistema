@@ -78,10 +78,17 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                         <p><a href="<?php echo $linkNovo; ?>" class="text-link">Clique aqui para registrar um pedido</a></p>
                     </div>
                 <?php else: ?>
-                    <p class="list-summary list-summary-block">
-                        <?php echo count($pedidos) . (count($pedidos) === 1 ? ' pedido' : ' pedidos'); ?>
-                        · Total vendido (sem cancelados): <strong><?php echo moeda($totalGeral); ?></strong>
-                    </p>
+                    <div class="search-bar">
+                        <label for="buscaPedidos" class="visually-hidden">Buscar pedido</label>
+                        <div class="search-input">
+                            <?php echo icone('busca'); ?>
+                            <input type="search" id="buscaPedidos" data-busca placeholder="Buscar por número, cliente ou status" autocomplete="off">
+                        </div>
+                        <p class="list-summary" id="resultadoBusca" data-singular="pedido" data-plural="pedidos" aria-live="polite">
+                            <?php echo count($pedidos) . (count($pedidos) === 1 ? ' pedido' : ' pedidos'); ?>
+                        </p>
+                    </div>
+                    <p class="text-muted list-total">Total vendido (sem cancelados): <strong><?php echo moeda($totalGeral); ?></strong></p>
                     <div class="table-responsive">
                         <table class="client-table">
                             <thead>
@@ -97,7 +104,8 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                             </thead>
                             <tbody>
                                 <?php foreach ($pedidos as $p): ?>
-                                    <tr>
+                                    <?php $textoBusca = '#' . $p['ID'] . ' pedido ' . $p['ID'] . ' ' . $p['CLIENTE'] . ' ' . ($p['USUARIO'] ?? '') . ' ' . (status_pedidos()[$p['STATUS']] ?? ''); ?>
+                                    <tr data-search="<?php echo htmlspecialchars(mb_strtolower($textoBusca)); ?>">
                                         <td class="cell-client">
                                             <span class="client-name">Pedido #<?php echo $p['ID']; ?></span>
                                             <span class="client-id"><?php echo date('d/m/Y H:i', strtotime($p['CRIADO_EM'])); ?></span>
@@ -122,6 +130,7 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                        <p class="no-results" id="semResultados">Nenhum pedido encontrado para essa busca.</p>
                     </div>
                 <?php endif; ?>
             </div>
@@ -129,5 +138,6 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
 
         <?php include __DIR__ . '/footer.php'; ?>
     </div>
+    <script src="js/busca.js"></script>
 </body>
 </html>

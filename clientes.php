@@ -45,9 +45,9 @@ $total = count($clientes);
                         <label for="buscaClientes" class="visually-hidden">Buscar cliente</label>
                         <div class="search-input">
                             <?php echo icone('busca'); ?>
-                            <input type="search" id="buscaClientes" placeholder="Buscar por nome, email ou telefone" autocomplete="off">
+                            <input type="search" id="buscaClientes" data-busca placeholder="Buscar por nome, email ou telefone" autocomplete="off">
                         </div>
-                        <p class="list-summary" id="resultadoBusca" data-total="<?php echo $total; ?>" aria-live="polite">
+                        <p class="list-summary" id="resultadoBusca" data-singular="cliente" data-plural="clientes" data-total="<?php echo $total; ?>" aria-live="polite">
                             <?php echo $total . ($total === 1 ? ' cliente' : ' clientes'); ?>
                         </p>
                     </div>
@@ -66,7 +66,7 @@ $total = count($clientes);
                             <tbody>
                                 <?php foreach ($clientes as $cliente): ?>
                                     <?php $nome = htmlspecialchars($cliente['nome']); ?>
-                                    <tr data-cliente-row data-search="<?php echo htmlspecialchars(mb_strtolower($cliente['nome'] . ' ' . $cliente['email'] . ' ' . ($cliente['telefone'] ?? ''))); ?>">
+                                    <tr data-search="<?php echo htmlspecialchars(mb_strtolower($cliente['nome'] . ' ' . $cliente['email'] . ' ' . ($cliente['telefone'] ?? ''))); ?>">
                                         <td class="cell-client">
                                             <div class="client">
                                                 <span class="avatar" aria-hidden="true"><?php echo htmlspecialchars(iniciais($cliente['nome'])); ?></span>
@@ -107,6 +107,6 @@ $total = count($clientes);
 
         <?php include __DIR__ . '/footer.php'; ?>
     </div>
-    <script src="js/clientes.js"></script>
+    <script src="js/busca.js"></script>
 </body>
 </html>

@@ -925,9 +925,22 @@ tfoot th {
   font-size: var(--text-base);
 }
 
-.list-summary-block {
-  display: inline-block;
+.list-total {
   margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.features-group + .features-group {
+  margin-top: var(--space-6);
+}
+
+.features-group h4.features-subtitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  color: var(--primary-dark);
+  font-size: var(--text-lg);
 }
 
 .badge {

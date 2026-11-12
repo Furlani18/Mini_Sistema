@@ -28,7 +28,8 @@ mini_sistema/
 ├── clientes.php     # Lista de clientes (requer login)
 ├── atualizar.php    # Formulário de atualização (requer login)
 ├── apagar.php       # Exclui o cliente e volta para a lista (requer login)
-├── produtos.php     # Cadastro/edição/lista de produtos
+├── produto_cadastro.php # Cadastro/edição de produto
+├── produtos.php     # Lista de produtos com busca
 ├── produto_apagar.php # Exclui produto (se nunca foi vendido)
 ├── pedidos.php      # Lista de pedidos
 ├── pedido_novo.php  # Registro de pedido com itens
@@ -46,7 +47,7 @@ mini_sistema/
 ├── js/
 │   ├── app.js        # Toasts e modal de confirmação de exclusão
 │   ├── formulario.js # Validação e máscara dos formulários de cliente
-│   ├── clientes.js   # Busca instantânea na lista
+│   ├── busca.js      # Busca instantânea nas listas (clientes, produtos, pedidos)
 │   └── pedido.js     # Itens e total do formulário de pedido
 ├── imagens/         # Pasta para armazenar imagens
 ├── conexao.php      # Conexão com o banco mini_sistema

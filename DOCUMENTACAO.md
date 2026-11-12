@@ -36,7 +36,8 @@ Todo o sistema fica protegido por uma tela de **login** baseada em sessão PHP.
 | Listar/Buscar  | `clientes.php`  | `SELECT`               |
 | Atualizar      | `atualizar.php` | `SELECT` + `UPDATE`    |
 | Apagar         | `apagar.php`    | `SELECT` + `DELETE`    |
-| Produtos (cadastrar/editar/listar) | `produtos.php` | `INSERT` / `UPDATE` / `SELECT` + `LEFT JOIN` |
+| Cadastrar/editar produto | `produto_cadastro.php` | `INSERT` / `SELECT` + `UPDATE` |
+| Listar/Buscar produtos | `produtos.php` | `SELECT` + `LEFT JOIN` |
 | Apagar produto | `produto_apagar.php` | `SELECT` + `DELETE` |
 | Listar pedidos | `pedidos.php`   | `SELECT` com `JOIN` em 4 tabelas + `GROUP BY` |
 | Novo pedido    | `pedido_novo.php` | `INSERT` em `pedidos` e `itens_pedido` (transação) |
@@ -133,7 +134,8 @@ mini_sistema/
 ├── clientes.php     # Listagem + busca de clientes (SELECT)
 ├── atualizar.php    # Edição de cliente (SELECT + UPDATE)
 ├── apagar.php       # Exclusão de cliente (bloqueada se ele tiver pedidos)
-├── produtos.php     # Cadastro, edição e listagem de produtos
+├── produto_cadastro.php # Cadastro e edição de produto (INSERT / UPDATE)
+├── produtos.php     # Listagem + busca de produtos
 ├── produto_apagar.php # Exclusão de produto (bloqueada se ele já foi vendido)
 ├── pedidos.php      # Listagem de pedidos (JOIN clientes/usuarios/itens_pedido)
 ├── pedido_novo.php  # Registro de pedido com itens (transação)
@@ -154,7 +156,7 @@ mini_sistema/
 ├── js/
 │   ├── app.js        # Toasts e modal de confirmação de exclusão
 │   ├── formulario.js # Validação/máscara dos formulários de cliente
-│   ├── clientes.js  # Busca instantânea na tabela de clientes
+│   ├── busca.js     # Busca instantânea nas listas (clientes, produtos e pedidos)
 │   └── pedido.js    # Linhas de itens e total do formulário de pedido
 ├── imagens/
 │   └── bem-vindo.jpeg
@@ -451,7 +453,10 @@ para `login.php?redirect=<página atual>` e encerra o script com `exit`.
 Esvazia `$_SESSION`, expira o cookie de sessão, chama `session_destroy()` e volta ao login.
 
 ### [index.php](index.php)
-Página inicial estática: mensagem de boas-vindas, imagem, atalhos e cards de funcionalidades.
+Página inicial: mensagem de boas-vindas, imagem, atalhos (Novo Cliente, Novo Pedido, Ver
+Relacionamentos) e os cards de funcionalidades em três grupos — **Clientes**, **Produtos** e
+**Pedidos** —, cada um com Cadastrar, Listar, Atualizar e Apagar. Os cards são gerados a partir do
+array `$grupos`.
 
 ### [cadastro.php](cadastro.php)
 Recebe `nome`, `email` e `telefone` por `POST`, valida campos obrigatórios (nome e email) e
@@ -460,7 +465,7 @@ executa um `INSERT` com *prepared statement*.
 ### [clientes.php](clientes.php)
 Executa um `SELECT` ordenado por `ID DESC` (mais recentes primeiro) e monta a tabela. Cada linha
 recebe o atributo `data-search` (nome + email + telefone em minúsculas) usado pela busca em
-[js/clientes.js](js/clientes.js). Mostra o total de registros ao lado da busca. Cada cliente tem
+[js/busca.js](js/busca.js). Mostra o total de registros ao lado da busca. Cada cliente tem
 um avatar com as iniciais (`iniciais()` em `ui.php`) e botões só com ícone para editar/apagar.
 Em telas pequenas a tabela vira uma lista de cartões.
 
@@ -474,11 +479,16 @@ tiver pedidos, não apaga e mostra o aviso (a FK `RESTRICT` também impediria no
 contrário, executa o `DELETE`, guarda a mensagem com `flash()` e redireciona para a lista, onde a
 mensagem aparece como toast. A confirmação acontece antes, no modal aberto por `js/app.js`.
 
+### [produto_cadastro.php](produto_cadastro.php)
+Formulário de produto, no mesmo modelo do cadastro de cliente. Sem `id` faz `INSERT` (e limpa o
+formulário para o próximo); com `?id=ID` carrega o produto e o `POST` faz `UPDATE`. Aceita preço
+como `1.234,50` ou `1234.50`. Nome duplicado (erro `23000` da chave `UNIQUE`) vira mensagem no
+campo. Produto inexistente volta para a lista com um aviso.
+
 ### [produtos.php](produtos.php)
-Formulário e lista na mesma página. Sem `id` faz `INSERT`; com `?editar=ID` carrega o produto e o
-`POST` faz `UPDATE`. Aceita preço como `1.234,50` ou `1234.50`. Nome duplicado (erro `23000` da
-chave `UNIQUE`) vira mensagem no campo. A lista usa `LEFT JOIN itens_pedido` + `SUM` para mostrar
-quantas unidades de cada produto já foram vendidas.
+Lista de produtos no mesmo formato da lista de clientes: busca instantânea, contador, botões de
+editar/apagar e cartões no celular. Usa `LEFT JOIN itens_pedido` + `SUM` para mostrar quantas
+unidades de cada produto já foram vendidas.
 
 ### [produto_apagar.php](produto_apagar.php)
 Conta em quantos itens de pedido o produto aparece; se for mais de zero, recusa a exclusão.
@@ -486,7 +496,8 @@ Conta em quantos itens de pedido o produto aparece; se for mais de zero, recusa 
 ### [pedidos.php](pedidos.php)
 Lista os pedidos com `INNER JOIN clientes`, `LEFT JOIN usuarios` e `LEFT JOIN itens_pedido`,
 agrupando (`GROUP BY`) para calcular a quantidade de itens e o total de cada pedido. Aceita o
-filtro `?cliente=ID` (usado pelo link da coluna "Pedidos" na lista de clientes).
+filtro `?cliente=ID` (usado pelo link da coluna "Pedidos" na lista de clientes). Tem a mesma busca
+instantânea da lista de clientes (por número, cliente, usuário ou status).
 
 ### [pedido_novo.php](pedido_novo.php)
 Formulário com cliente, status, observação e linhas de itens (produto + quantidade). No `POST`,
@@ -554,9 +565,11 @@ Carregado em todas as páginas internas (via `footer.php`). Fecha os toasts sozi
 (pausa com o mouse em cima) e abre o modal de confirmação para links com
 `data-confirmar-exclusao`.
 
-### 8.3 [js/clientes.js](js/clientes.js)
-Busca instantânea (sem recarregar a página): a cada tecla, esconde as linhas cujo
-`data-search` não contém o termo e atualiza o contador ("3 clientes encontrados").
+### 8.3 [js/busca.js](js/busca.js)
+Busca instantânea (sem recarregar a página), usada nas listas de **clientes**, **produtos** e
+**pedidos**: a cada tecla, esconde as linhas `<tr data-search>` cujo texto não contém o termo e
+atualiza o contador ("2 de 5 produtos"). A página indica o campo com `data-busca` e as palavras do
+contador com `data-singular`/`data-plural` em `#resultadoBusca`.
 
 ### 8.4 [js/pedido.js](js/pedido.js)
 No formulário de novo pedido: o botão "Adicionar produto" clona uma linha de item, a lixeira

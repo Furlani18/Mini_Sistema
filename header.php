@@ -13,6 +13,7 @@ $paginaAtual = basename($_SERVER['SCRIPT_NAME']);
 $secoes = [
     'atualizar.php'      => 'clientes.php',
     'apagar.php'         => 'clientes.php',
+    'produto_cadastro.php' => 'produtos.php',
     'produto_apagar.php' => 'produtos.php',
     'pedido_novo.php'    => 'pedidos.php',
     'pedido_ver.php'     => 'pedidos.php',

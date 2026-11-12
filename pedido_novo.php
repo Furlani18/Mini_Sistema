@@ -121,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             Para registrar um pedido é preciso ter pelo menos um
                             <?php if (!$clientes): ?><a href="cadastro.php" class="text-link">cliente cadastrado</a><?php endif; ?>
                             <?php if (!$clientes && !$produtos): ?> e um <?php endif; ?>
-                            <?php if (!$produtos): ?><a href="produtos.php" class="text-link">produto cadastrado</a><?php endif; ?>.
+                            <?php if (!$produtos): ?><a href="produto_cadastro.php" class="text-link">produto cadastrado</a><?php endif; ?>.
                         </span>
                     </div>
                 <?php else: ?>
