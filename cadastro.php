@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
     <div class="container">
-        <?php $breadcrumb = ['Cadastrar Cliente' => null]; include __DIR__ . '/header.php'; ?>
+        <?php $breadcrumb = ['Clientes' => 'clientes.php', 'Cadastrar Cliente' => null]; include __DIR__ . '/header.php'; ?>
 
         <main>
             <div class="form-container">

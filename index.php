@@ -39,6 +39,11 @@ $estoqueBaixo = $pdo->query(
 $plural = fn(int $n, string $um, string $varios) => $n . ' ' . ($n === 1 ? $um : $varios);
 $primeiroNome = explode(' ', trim($_SESSION['usuario_nome'] ?? ''))[0];
 
+// Data de hoje por extenso (ex.: "Quinta-feira, 12 de novembro de 2026")
+$diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+$meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+$hoje = $diasSemana[(int)date('w')] . ', ' . date('j') . ' de ' . $meses[(int)date('n') - 1] . ' de ' . date('Y');
+
 // Cards de módulo: cada um com o seu número principal e um indicador próprio
 $modulos = [
     [
@@ -79,17 +84,20 @@ $modulos = [
       <?php include __DIR__ . '/header.php'; ?>
 
       <main>
-        <section class="hero">
-          <img src="imagens/bem-vindo.jpeg" alt="" class="hero-image" />
-          <div class="hero-texto">
+        <div class="page-head">
+          <img src="imagens/bem-vindo.jpeg" alt="Bem-vindo" class="page-head-image" />
+          <div class="page-head-texto">
+            <p class="page-head-data"><?php echo $hoje; ?></p>
             <h2>Olá, <?php echo htmlspecialchars($primeiroNome ?: 'bem-vindo'); ?>!</h2>
-            <p>Aqui está um resumo de clientes, produtos e pedidos do sistema.</p>
+            <p>Resumo de clientes, produtos e pedidos do sistema.</p>
           </div>
-          <div class="hero-acoes">
-            <a href="pedido_novo.php" class="btn btn-primary"><?php echo icone('carrinho'); ?> Novo Pedido</a>
-            <a href="relacionamentos.php" class="btn btn-outline"><?php echo icone('banco'); ?> Como os dados se relacionam</a>
+          <div class="page-head-acoes">
+            <a href="relacionamentos.php" class="btn btn-outline"><?php echo icone('banco'); ?> Relacionamentos</a>
+            <a href="pedido_novo.php" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Pedido</a>
           </div>
-        </section>
+        </div>
+
+        <h3 class="secao-titulo">Visão geral</h3>
 
         <section class="modulos" aria-label="Módulos do sistema">
           <?php foreach ($modulos as $m): ?>
@@ -111,6 +119,7 @@ $modulos = [
           <?php endforeach; ?>
         </section>
 
+        <h3 class="secao-titulo">Atividade recente</h3>
         <div class="paineis">
           <section class="painel">
             <div class="painel-cabecalho">
