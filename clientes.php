@@ -3,7 +3,15 @@ require_once 'auth.php';
 require_once 'conexao.php';
 require_once 'ui.php';
 
-$clientes = $pdo->query('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE AS telefone FROM clientes ORDER BY ID DESC')->fetchAll();
+// LEFT JOIN com pedidos para mostrar quantos pedidos cada cliente tem (0 se nenhum)
+$clientes = $pdo->query(
+    'SELECT c.ID AS id, c.NOME AS nome, c.EMAIL AS email, c.TELEFONE AS telefone,
+            COUNT(p.ID) AS pedidos
+       FROM clientes c
+       LEFT JOIN pedidos p ON p.CLIENTE_ID = c.ID
+      GROUP BY c.ID, c.NOME, c.EMAIL, c.TELEFONE
+      ORDER BY c.ID DESC'
+)->fetchAll();
 $total = count($clientes);
 ?>
 
@@ -51,6 +59,7 @@ $total = count($clientes);
                                     <th>Cliente</th>
                                     <th>Email</th>
                                     <th>Telefone</th>
+                                    <th class="num">Pedidos</th>
                                     <th class="col-actions"><span class="visually-hidden">Ações</span></th>
                                 </tr>
                             </thead>
@@ -69,6 +78,10 @@ $total = count($clientes);
                                         </td>
                                         <td data-label="Email"><?php echo htmlspecialchars($cliente['email']); ?></td>
                                         <td data-label="Telefone"><?php echo $cliente['telefone'] ? htmlspecialchars($cliente['telefone']) : '<span class="text-muted">—</span>'; ?></td>
+                                        <td class="num" data-label="Pedidos">
+                                            <a href="pedidos.php?cliente=<?php echo $cliente['id']; ?>" class="text-link"
+                                               title="Ver pedidos de <?php echo $nome; ?>"><?php echo (int)$cliente['pedidos']; ?></a>
+                                        </td>
                                         <td class="col-actions">
                                             <div class="action-buttons">
                                                 <a href="atualizar.php?id=<?php echo $cliente['id']; ?>"

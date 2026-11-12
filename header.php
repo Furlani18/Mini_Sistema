@@ -11,15 +11,22 @@ $paginaAtual = basename($_SERVER['SCRIPT_NAME']);
 
 // Páginas que pertencem a uma seção do menu (ex.: editar/apagar fazem parte de "Clientes").
 $secoes = [
-    'atualizar.php' => 'clientes.php',
-    'apagar.php'    => 'clientes.php',
+    'atualizar.php'      => 'clientes.php',
+    'apagar.php'         => 'clientes.php',
+    'produto_apagar.php' => 'produtos.php',
+    'pedido_novo.php'    => 'pedidos.php',
+    'pedido_ver.php'     => 'pedidos.php',
+    'pedido_apagar.php'  => 'pedidos.php',
 ];
 $secaoAtiva = $secoes[$paginaAtual] ?? $paginaAtual;
 
 $menu = [
-    'index.php'    => ['home', 'Home'],
-    'cadastro.php' => ['usuario-mais', 'Cadastrar Cliente'],
-    'clientes.php' => ['usuarios', 'Listar Clientes'],
+    'index.php'            => ['home', 'Home'],
+    'cadastro.php'         => ['usuario-mais', 'Cadastrar Cliente'],
+    'clientes.php'         => ['usuarios', 'Listar Clientes'],
+    'produtos.php'         => ['pacote', 'Produtos'],
+    'pedidos.php'          => ['carrinho', 'Pedidos'],
+    'relacionamentos.php'  => ['banco', 'Relacionamentos'],
 ];
 
 $breadcrumb = $breadcrumb ?? [];

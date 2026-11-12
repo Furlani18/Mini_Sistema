@@ -11,6 +11,9 @@ Um sistema CRUD (Create, Read, Update, Delete) simples e intuitivo para gerencia
 - ✅ **Listar** - Visualize todos os clientes em uma tabela elegante
 - ✅ **Atualizar** - Edite informações dos clientes existentes
 - ✅ **Apagar** - Remova clientes com confirmação de segurança
+- 📦 **Produtos** - Cadastre, edite e apague produtos (preço e estoque)
+- 🛒 **Pedidos** - Registre pedidos de um cliente com vários produtos, altere o status e veja o total
+- 🗂️ **Relacionamentos** - Página com o diagrama das 5 tabelas, seus relacionamentos e uma consulta ao vivo
 
 ## 📁 Estrutura do Projeto
 
@@ -25,6 +28,14 @@ mini_sistema/
 ├── clientes.php     # Lista de clientes (requer login)
 ├── atualizar.php    # Formulário de atualização (requer login)
 ├── apagar.php       # Exclui o cliente e volta para a lista (requer login)
+├── produtos.php     # Cadastro/edição/lista de produtos
+├── produto_apagar.php # Exclui produto (se nunca foi vendido)
+├── pedidos.php      # Lista de pedidos
+├── pedido_novo.php  # Registro de pedido com itens
+├── pedido_ver.php   # Detalhes do pedido e mudança de status
+├── pedido_apagar.php # Exclui pedido (itens em cascata)
+├── relacionamentos.php # Diagrama e explicação das 5 tabelas
+├── estoque.php      # Baixa/devolução de estoque dos pedidos
 ├── header.php       # Cabeçalho, menu e breadcrumb compartilhados
 ├── footer.php       # Rodapé, toasts e modal de exclusão compartilhados
 ├── form_cliente.php # Campos do formulário de cliente (cadastro e atualização)
@@ -35,11 +46,13 @@ mini_sistema/
 ├── js/
 │   ├── app.js        # Toasts e modal de confirmação de exclusão
 │   ├── formulario.js # Validação e máscara dos formulários de cliente
-│   └── clientes.js   # Busca instantânea na lista
+│   ├── clientes.js   # Busca instantânea na lista
+│   └── pedido.js     # Itens e total do formulário de pedido
 ├── imagens/         # Pasta para armazenar imagens
 ├── conexao.php      # Conexão com o banco mini_sistema
 ├── usuarios.sql     # Script de criação da tabela `usuarios` + usuário padrão
-└── clientes.sql     # Script de criação da tabela `clientes`
+├── clientes.sql     # Script de criação da tabela `clientes`
+└── relacionamentos.sql # Script de `produtos`, `pedidos` e `itens_pedido` (+ dados de exemplo)
 ```
 
 ## 🔐 Login
@@ -86,7 +99,18 @@ http://localhost:8000
 
 ## 💾 Armazenamento de Dados
 
-Os dados dos clientes são armazenados no MySQL do XAMPP, no banco `mini_sistema`, tabela `clientes`. A tabela deve conter as colunas `ID` (chave primaria com auto incremento), `NOME`, `EMAIL` e `TELEFONE`.
+Os dados ficam no MySQL do XAMPP, no banco `mini_sistema`, em **5 tabelas relacionadas**:
+
+| Tabela         | Conteúdo                         | Relacionamentos |
+|----------------|----------------------------------|-----------------|
+| `usuarios`     | Usuários que fazem login         | 1:N com `pedidos` (quem registrou) |
+| `clientes`     | Clientes                         | 1:N com `pedidos` (quem comprou) |
+| `produtos`     | Catálogo (preço e estoque)       | 1:N com `itens_pedido` |
+| `pedidos`      | Pedidos (cliente, status, data)  | FK para `clientes` e `usuarios`; 1:N com `itens_pedido` |
+| `itens_pedido` | Produtos de cada pedido          | FK para `pedidos` e `produtos` — resolve o **N:N** entre pedidos e produtos |
+
+Execute os scripts nesta ordem: `usuarios.sql`, `clientes.sql` e `relacionamentos.sql`.
+Detalhes, regras `ON DELETE` e diagrama na seção 6 da [DOCUMENTACAO.md](DOCUMENTACAO.md).
 
 ## 🎨 Características
 
@@ -117,7 +141,10 @@ Os dados dos clientes são armazenados no MySQL do XAMPP, no banco `mini_sistema
 - **Login** - Tela de acesso ao sistema (obrigatória)
 - **Home** - Página inicial com informações gerais
 - **Cadastrar Cliente** - Formulário para adicionar novo cliente
-- **Listar Clientes** - Tabela com todos os clientes cadastrados
+- **Listar Clientes** - Tabela com todos os clientes cadastrados (com a quantidade de pedidos)
+- **Produtos** - Cadastro e lista de produtos
+- **Pedidos** - Lista de pedidos, novo pedido e detalhes
+- **Relacionamentos** - Diagrama das tabelas e seus relacionamentos
 - **Sair** - Encerra a sessão e retorna à tela de login
 
 ## 🛠️ Tecnologias Utilizadas
@@ -133,7 +160,7 @@ Para dúvidas ou problemas, verifique:
 1. Se o PHP está instalado corretamente
 2. Se a pasta `imagens` existe
 3. Se o MySQL está ativo no painel do XAMPP
-4. Se o banco `mini_sistema` e as tabelas `clientes` e `usuarios` foram criadas corretamente
+4. Se o banco `mini_sistema` e as 5 tabelas (`usuarios`, `clientes`, `produtos`, `pedidos` e `itens_pedido`) foram criadas corretamente
 
 ## 📄 Licença
 

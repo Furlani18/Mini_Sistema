@@ -58,7 +58,7 @@ function configurarModalExclusao() {
     if (!link) return;
 
     e.preventDefault();
-    nome.textContent = link.dataset.confirmarExclusao || "este cliente";
+    nome.textContent = link.dataset.confirmarExclusao || "este registro";
     confirmar.href = link.href;
     modal.showModal();
     cancelar.focus();

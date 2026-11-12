@@ -27,9 +27,9 @@ $iconesToast = ['success' => 'sucesso', 'error' => 'erro', 'warning' => 'alerta'
 <dialog class="modal" id="modalConfirmar" aria-labelledby="modalTitulo" aria-describedby="modalTexto">
     <div class="modal-box">
         <div class="modal-icon"><?php echo icone('alerta'); ?></div>
-        <h2 id="modalTitulo">Apagar cliente?</h2>
+        <h2 id="modalTitulo">Confirmar exclusão</h2>
         <p id="modalTexto">
-            Tem certeza que deseja apagar <strong data-modal-nome>este cliente</strong>?
+            Tem certeza que deseja apagar <strong data-modal-nome>este registro</strong>?
             Esta ação não pode ser desfeita.
         </p>
         <div class="modal-actions">

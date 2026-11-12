@@ -8,11 +8,20 @@ require_once 'ui.php';
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-$stmt = $pdo->prepare('SELECT NOME FROM clientes WHERE ID = ?');
+$stmt = $pdo->prepare(
+    'SELECT c.NOME, COUNT(p.ID) AS PEDIDOS
+       FROM clientes c
+       LEFT JOIN pedidos p ON p.CLIENTE_ID = c.ID
+      WHERE c.ID = ?
+      GROUP BY c.ID, c.NOME'
+);
 $stmt->execute([$id]);
 $cliente = $stmt->fetch();
 
-if ($cliente) {
+if ($cliente && $cliente['PEDIDOS'] > 0) {
+    // A chave estrangeira FK_PEDIDOS_CLIENTE (ON DELETE RESTRICT) também bloquearia no banco
+    flash('error', "O cliente '{$cliente['NOME']}' não pode ser apagado: ele possui {$cliente['PEDIDOS']} pedido(s). Apague os pedidos primeiro.");
+} elseif ($cliente) {
     $delete = $pdo->prepare('DELETE FROM clientes WHERE ID = ?');
     $delete->execute([$id]);
     flash('success', "Cliente '{$cliente['NOME']}' removido com sucesso!");

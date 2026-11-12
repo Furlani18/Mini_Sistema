@@ -36,6 +36,16 @@ Todo o sistema fica protegido por uma tela de **login** baseada em sessão PHP.
 | Listar/Buscar  | `clientes.php`  | `SELECT`               |
 | Atualizar      | `atualizar.php` | `SELECT` + `UPDATE`    |
 | Apagar         | `apagar.php`    | `SELECT` + `DELETE`    |
+| Produtos (cadastrar/editar/listar) | `produtos.php` | `INSERT` / `UPDATE` / `SELECT` + `LEFT JOIN` |
+| Apagar produto | `produto_apagar.php` | `SELECT` + `DELETE` |
+| Listar pedidos | `pedidos.php`   | `SELECT` com `JOIN` em 4 tabelas + `GROUP BY` |
+| Novo pedido    | `pedido_novo.php` | `INSERT` em `pedidos` e `itens_pedido` (transação) |
+| Ver pedido / mudar status | `pedido_ver.php` | `SELECT` com `JOIN` + `UPDATE` |
+| Apagar pedido  | `pedido_apagar.php` | `DELETE` (itens apagados por `CASCADE`) |
+| Relacionamentos | `relacionamentos.php` | Diagrama + `SELECT` com `JOIN` nas 5 tabelas |
+
+O banco tem **5 tabelas relacionadas**: `usuarios`, `clientes`, `produtos`, `pedidos` e
+`itens_pedido` (detalhes e diagrama na [seção 6](#6-banco-de-dados)).
 
 ---
 
@@ -69,16 +79,21 @@ CREATE DATABASE IF NOT EXISTS mini_sistema
 USE mini_sistema;
 ```
 
-Depois, execute os dois scripts do projeto:
+Depois, execute os três scripts do projeto, **nesta ordem** (as tabelas novas dependem das antigas):
 - [usuarios.sql](usuarios.sql) — cria a tabela `usuarios` (login) e o usuário administrador;
-- [clientes.sql](clientes.sql) — cria a tabela `clientes` (dados do CRUD).
+- [clientes.sql](clientes.sql) — cria a tabela `clientes` (dados do CRUD);
+- [relacionamentos.sql](relacionamentos.sql) — cria `produtos`, `pedidos` e `itens_pedido` com as
+  chaves estrangeiras, e insere dados de exemplo (5 produtos, 2 clientes e 2 pedidos).
 
 Pelo terminal:
 
 ```bash
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < usuarios.sql
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < clientes.sql
+C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < relacionamentos.sql
 ```
+
+Os três scripts podem ser executados mais de uma vez sem duplicar tabelas nem dados.
 
 ### 3.3 Acessar
 
@@ -117,7 +132,15 @@ mini_sistema/
 ├── cadastro.php     # Formulário de cadastro de cliente (INSERT)
 ├── clientes.php     # Listagem + busca de clientes (SELECT)
 ├── atualizar.php    # Edição de cliente (SELECT + UPDATE)
-├── apagar.php       # Exclusão de cliente (SELECT + DELETE) e volta para a lista
+├── apagar.php       # Exclusão de cliente (bloqueada se ele tiver pedidos)
+├── produtos.php     # Cadastro, edição e listagem de produtos
+├── produto_apagar.php # Exclusão de produto (bloqueada se ele já foi vendido)
+├── pedidos.php      # Listagem de pedidos (JOIN clientes/usuarios/itens_pedido)
+├── pedido_novo.php  # Registro de pedido com itens (transação)
+├── pedido_ver.php   # Detalhes do pedido e mudança de status
+├── pedido_apagar.php # Exclusão de pedido (itens apagados em cascata)
+├── relacionamentos.php # Diagrama e explicação das 5 tabelas + consulta ao vivo
+├── estoque.php      # devolver_estoque() e baixar_estoque()
 ├── header.php       # Cabeçalho, menu e breadcrumb compartilhados
 ├── footer.php       # Rodapé, toasts e modal de exclusão compartilhados
 ├── form_cliente.php # Campos do formulário de cliente (cadastro e atualização)
@@ -125,12 +148,14 @@ mini_sistema/
 ├── ui.php           # icone(), iniciais(), flash() e flash_pegar()
 ├── usuarios.sql     # Script da tabela `usuarios` + usuário admin
 ├── clientes.sql     # Script da tabela `clientes`
+├── relacionamentos.sql # Script de `produtos`, `pedidos` e `itens_pedido` + dados de exemplo
 ├── css/
 │   └── style.css    # Estilo de todas as páginas
 ├── js/
 │   ├── app.js        # Toasts e modal de confirmação de exclusão
 │   ├── formulario.js # Validação/máscara dos formulários de cliente
-│   └── clientes.js  # Busca instantânea na tabela de clientes
+│   ├── clientes.js  # Busca instantânea na tabela de clientes
+│   └── pedido.js    # Linhas de itens e total do formulário de pedido
 ├── imagens/
 │   └── bem-vindo.jpeg
 ├── README.md        # Resumo do projeto
@@ -230,21 +255,171 @@ CREATE TABLE IF NOT EXISTS clientes (
 );
 ```
 
-### 6.3 Diagrama
+### 6.3 Tabela `produtos`
+
+Catálogo de produtos que podem ser vendidos. Criada por [relacionamentos.sql](relacionamentos.sql).
+
+| Coluna      | Tipo            | Restrições                         | Descrição                    |
+|-------------|-----------------|------------------------------------|------------------------------|
+| `ID`        | `INT(11)`       | PK, `AUTO_INCREMENT`               | Identificador                |
+| `NOME`      | `VARCHAR(100)`  | `NOT NULL`, `UNIQUE`               | Nome do produto              |
+| `DESCRICAO` | `VARCHAR(255)`  | `NULL`                             | Descrição (opcional)         |
+| `PRECO`     | `DECIMAL(10,2)` | `NOT NULL`, `CHECK (PRECO >= 0)`   | Preço atual                  |
+| `ESTOQUE`   | `INT(11)`       | `NOT NULL`, `DEFAULT 0`, `CHECK (ESTOQUE >= 0)` | Quantidade disponível |
+| `CRIADO_EM` | `TIMESTAMP`     | `DEFAULT CURRENT_TIMESTAMP`        | Data de criação              |
+
+### 6.4 Tabela `pedidos`
+
+Cada pedido pertence a **um cliente** e foi registrado por **um usuário** do sistema.
+
+| Coluna       | Tipo           | Restrições                                   | Descrição                         |
+|--------------|----------------|----------------------------------------------|-----------------------------------|
+| `ID`         | `INT(11)`      | PK, `AUTO_INCREMENT`                         | Número do pedido                  |
+| `CLIENTE_ID` | `INT(11)`      | `NOT NULL`, **FK → `clientes.ID`**           | Quem comprou                      |
+| `USUARIO_ID` | `INT(11)`      | `NULL`, **FK → `usuarios.ID`**               | Quem registrou (usuário logado)   |
+| `STATUS`     | `ENUM`         | `'ABERTO'`, `'PAGO'`, `'ENVIADO'`, `'CANCELADO'` (padrão `ABERTO`) | Situação |
+| `OBSERVACAO` | `VARCHAR(255)` | `NULL`                                       | Observação livre                  |
+| `CRIADO_EM`  | `TIMESTAMP`    | `DEFAULT CURRENT_TIMESTAMP`                  | Data do pedido                    |
+
+### 6.5 Tabela `itens_pedido`
+
+Tabela **associativa** que resolve o relacionamento **N:N** entre `pedidos` e `produtos`: cada
+linha diz "neste pedido, este produto, nesta quantidade, por este preço".
+
+| Coluna           | Tipo            | Restrições                              | Descrição                                |
+|------------------|-----------------|-----------------------------------------|------------------------------------------|
+| `ID`             | `INT(11)`       | PK, `AUTO_INCREMENT`                    | Identificador                            |
+| `PEDIDO_ID`      | `INT(11)`       | `NOT NULL`, **FK → `pedidos.ID`**       | Pedido ao qual o item pertence           |
+| `PRODUTO_ID`     | `INT(11)`       | `NOT NULL`, **FK → `produtos.ID`**      | Produto vendido                          |
+| `QUANTIDADE`     | `INT(11)`       | `NOT NULL`, `CHECK (QUANTIDADE > 0)`    | Quantidade                               |
+| `PRECO_UNITARIO` | `DECIMAL(10,2)` | `NOT NULL`                              | Preço **no momento da venda** (cópia de `produtos.PRECO`) |
+
+Chave única `(PEDIDO_ID, PRODUTO_ID)`: o mesmo produto não aparece duas vezes no mesmo pedido
+(se o usuário escolher o mesmo produto em duas linhas, o sistema soma as quantidades).
+
+> **Por que copiar o preço?** Se o preço do produto mudar amanhã, os pedidos antigos continuam
+> com o valor que o cliente realmente pagou.
+
+### 6.6 Relacionamentos
+
+| # | Relacionamento | Tipo | Chave estrangeira | `ON DELETE` | Significado |
+|---|----------------|------|-------------------|-------------|-------------|
+| 1 | `clientes` → `pedidos` | **1 : N** | `pedidos.CLIENTE_ID` → `clientes.ID` (`FK_PEDIDOS_CLIENTE`) | `RESTRICT` | Um cliente faz vários pedidos; cada pedido é de um único cliente. Cliente com pedidos **não pode ser apagado**. |
+| 2 | `usuarios` → `pedidos` | **1 : N** | `pedidos.USUARIO_ID` → `usuarios.ID` (`FK_PEDIDOS_USUARIO`) | `SET NULL` | Um usuário registra vários pedidos. Se o usuário for apagado, o pedido continua, com `USUARIO_ID = NULL`. |
+| 3 | `pedidos` → `itens_pedido` | **1 : N** | `itens_pedido.PEDIDO_ID` → `pedidos.ID` (`FK_ITENS_PEDIDO`) | `CASCADE` | Um pedido tem vários itens. **Apagar o pedido apaga os itens** automaticamente. |
+| 4 | `produtos` → `itens_pedido` | **1 : N** | `itens_pedido.PRODUTO_ID` → `produtos.ID` (`FK_ITENS_PRODUTO`) | `RESTRICT` | Um produto aparece em vários itens. Produto já vendido **não pode ser apagado**. |
+| 5 | `pedidos` ↔ `produtos` | **N : N** | através de `itens_pedido` | — | Um pedido tem vários produtos e um produto está em vários pedidos. |
+
+Todas as chaves estrangeiras usam `ON UPDATE CASCADE` e exigem o motor **InnoDB** (o script
+converte `usuarios` e `clientes` para InnoDB, caso ainda não estejam).
+
+**Como cada regra aparece no sistema:**
+- Apagar um cliente com pedidos → mensagem "não pode ser apagado: ele possui N pedido(s)".
+- Apagar um produto já vendido → mensagem "não pode ser apagado: ele aparece em N pedido(s)".
+- Apagar um pedido → os itens somem junto (`CASCADE`) e o estoque é devolvido.
+- A lista de clientes mostra a coluna **Pedidos** (link para os pedidos daquele cliente).
+
+### 6.7 Diagrama (DER)
+
+O mesmo diagrama aparece desenhado, com a quantidade de registros de cada tabela, na página
+**Relacionamentos** do sistema ([relacionamentos.php](relacionamentos.php)).
 
 ```
-┌───────────────────────┐        ┌───────────────────────┐
-│       usuarios        │        │       clientes        │
-├───────────────────────┤        ├───────────────────────┤
-│ PK ID                 │        │ PK ID                 │
-│    NOME               │        │    NOME               │
-│ UQ EMAIL              │        │    EMAIL              │
-│    TELEFONE           │        │    TELEFONE           │
-│    SENHA (hash)       │        │    CRIADO_EM          │
-│    CRIADO_EM          │        └───────────────────────┘
-└───────────────────────┘
-   (sem relacionamento entre as tabelas — são independentes)
+┌──────────────────┐                                  ┌──────────────────┐
+│     usuarios     │                                  │     clientes     │
+├──────────────────┤                                  ├──────────────────┤
+│ PK ID            │                                  │ PK ID            │
+│    NOME          │                                  │    NOME          │
+│ UQ EMAIL         │                                  │    EMAIL         │
+│    TELEFONE      │                                  │    TELEFONE      │
+│    SENHA (hash)  │                                  │    CRIADO_EM     │
+│    CRIADO_EM     │                                  └────────┬─────────┘
+└────────┬─────────┘                                           │ 1
+         │ 1                                                   │
+         │              ┌──────────────────────┐               │
+         │            N │       pedidos        │ N             │
+         └─────────────►├──────────────────────┤◄──────────────┘
+                        │ PK ID                │
+                        │ FK CLIENTE_ID        │
+                        │ FK USUARIO_ID        │
+                        │    STATUS            │
+                        │    OBSERVACAO        │
+                        │    CRIADO_EM         │
+                        └──────────┬───────────┘
+                                   │ 1
+                                   │
+                                   ▼ N
+                        ┌──────────────────────┐         ┌──────────────────┐
+                        │     itens_pedido     │ N     1 │     produtos     │
+                        ├──────────────────────┤◄────────┤──────────────────┤
+                        │ PK ID                │         │ PK ID            │
+                        │ FK PEDIDO_ID         │         │ UQ NOME          │
+                        │ FK PRODUTO_ID        │         │    DESCRICAO     │
+                        │    QUANTIDADE        │         │    PRECO         │
+                        │    PRECO_UNITARIO    │         │    ESTOQUE       │
+                        └──────────────────────┘         │    CRIADO_EM     │
+                                                         └──────────────────┘
 ```
+
+Em notação Mermaid (renderiza no GitHub/VS Code):
+
+```mermaid
+erDiagram
+    usuarios ||--o{ pedidos : "registra"
+    clientes ||--o{ pedidos : "faz"
+    pedidos  ||--|{ itens_pedido : "contém"
+    produtos ||--o{ itens_pedido : "aparece em"
+
+    usuarios {
+        int ID PK
+        varchar NOME
+        varchar EMAIL UK
+        varchar TELEFONE
+        varchar SENHA
+        timestamp CRIADO_EM
+    }
+    clientes {
+        int ID PK
+        varchar NOME
+        varchar EMAIL
+        varchar TELEFONE
+        timestamp CRIADO_EM
+    }
+    pedidos {
+        int ID PK
+        int CLIENTE_ID FK
+        int USUARIO_ID FK
+        enum STATUS
+        varchar OBSERVACAO
+        timestamp CRIADO_EM
+    }
+    itens_pedido {
+        int ID PK
+        int PEDIDO_ID FK
+        int PRODUTO_ID FK
+        int QUANTIDADE
+        decimal PRECO_UNITARIO
+    }
+    produtos {
+        int ID PK
+        varchar NOME UK
+        varchar DESCRICAO
+        decimal PRECO
+        int ESTOQUE
+        timestamp CRIADO_EM
+    }
+```
+
+### 6.8 Regras de estoque
+
+Implementadas em [estoque.php](estoque.php), sempre dentro de uma transação:
+
+| Ação                                   | Efeito no estoque               |
+|----------------------------------------|---------------------------------|
+| Registrar pedido                       | Baixa (falha se não houver estoque suficiente) |
+| Mudar status para **Cancelado**        | Devolve                         |
+| Tirar um pedido de **Cancelado**       | Baixa de novo (se houver estoque) |
+| Apagar pedido (não cancelado)          | Devolve                         |
 
 ---
 
@@ -294,9 +469,48 @@ Em telas pequenas a tabela vira uma lista de cartões.
 - No `POST`, valida com `validar_cliente()` e executa o `UPDATE`; erros aparecem embaixo de cada campo.
 
 ### [apagar.php](apagar.php)
-Busca o registro pelo `id`, executa o `DELETE`, guarda a mensagem com `flash()` e redireciona
-imediatamente para a lista, onde a mensagem aparece como toast. A confirmação acontece antes,
-no modal aberto por `js/app.js`.
+Busca o registro pelo `id` junto com a quantidade de pedidos (`LEFT JOIN pedidos`). Se o cliente
+tiver pedidos, não apaga e mostra o aviso (a FK `RESTRICT` também impediria no banco). Caso
+contrário, executa o `DELETE`, guarda a mensagem com `flash()` e redireciona para a lista, onde a
+mensagem aparece como toast. A confirmação acontece antes, no modal aberto por `js/app.js`.
+
+### [produtos.php](produtos.php)
+Formulário e lista na mesma página. Sem `id` faz `INSERT`; com `?editar=ID` carrega o produto e o
+`POST` faz `UPDATE`. Aceita preço como `1.234,50` ou `1234.50`. Nome duplicado (erro `23000` da
+chave `UNIQUE`) vira mensagem no campo. A lista usa `LEFT JOIN itens_pedido` + `SUM` para mostrar
+quantas unidades de cada produto já foram vendidas.
+
+### [produto_apagar.php](produto_apagar.php)
+Conta em quantos itens de pedido o produto aparece; se for mais de zero, recusa a exclusão.
+
+### [pedidos.php](pedidos.php)
+Lista os pedidos com `INNER JOIN clientes`, `LEFT JOIN usuarios` e `LEFT JOIN itens_pedido`,
+agrupando (`GROUP BY`) para calcular a quantidade de itens e o total de cada pedido. Aceita o
+filtro `?cliente=ID` (usado pelo link da coluna "Pedidos" na lista de clientes).
+
+### [pedido_novo.php](pedido_novo.php)
+Formulário com cliente, status, observação e linhas de itens (produto + quantidade). No `POST`,
+dentro de **uma transação**: insere em `pedidos` (com `USUARIO_ID` = usuário logado), insere cada
+item em `itens_pedido` copiando o preço atual de `produtos` (`INSERT ... SELECT`) e baixa o
+estoque. Se faltar estoque, faz `rollBack()` e nada é gravado.
+
+### [pedido_ver.php](pedido_ver.php)
+Mostra os dados do pedido, do cliente e do usuário (JOINs) e a tabela de itens
+(`itens_pedido INNER JOIN produtos`) com subtotal e total. Permite alterar o status, aplicando as
+regras de estoque da seção 6.8.
+
+### [pedido_apagar.php](pedido_apagar.php)
+Devolve o estoque (se o pedido não estava cancelado) e apaga o pedido; os itens são removidos pelo
+próprio banco (`ON DELETE CASCADE`).
+
+### [relacionamentos.php](relacionamentos.php)
+Página de apresentação do modelo: diagrama SVG das 5 tabelas (com PK/FK, cardinalidade 1–N e
+quantidade de registros), tabela explicando cada relacionamento e uma consulta ao vivo com `JOIN`
+nas 5 tabelas, exibindo o SQL e o resultado.
+
+### [estoque.php](estoque.php)
+Funções `devolver_estoque()` e `baixar_estoque()` (usa `SELECT ... FOR UPDATE` para travar as
+linhas dos produtos durante a transação).
 
 ### [usuarios.sql](usuarios.sql)
 Cria a tabela `usuarios`, garante a coluna `TELEFONE` (sintaxe `ADD COLUMN IF NOT EXISTS`,
@@ -306,6 +520,11 @@ própria do MariaDB) e insere o administrador padrão apenas se ele ainda não e
 ### [clientes.sql](clientes.sql)
 Cria a tabela `clientes` (se ainda não existir) e garante a coluna `CRIADO_EM` em tabelas
 criadas anteriormente sem ela.
+
+### [relacionamentos.sql](relacionamentos.sql)
+Converte `usuarios` e `clientes` para InnoDB, cria `produtos`, `pedidos` e `itens_pedido` com as
+chaves estrangeiras e `CHECK`s, e insere dados de exemplo apenas se ainda não existirem
+(`INSERT IGNORE` e `INSERT ... SELECT ... WHERE NOT EXISTS`).
 
 ---
 
@@ -338,6 +557,12 @@ Carregado em todas as páginas internas (via `footer.php`). Fecha os toasts sozi
 ### 8.3 [js/clientes.js](js/clientes.js)
 Busca instantânea (sem recarregar a página): a cada tecla, esconde as linhas cujo
 `data-search` não contém o termo e atualiza o contador ("3 clientes encontrados").
+
+### 8.4 [js/pedido.js](js/pedido.js)
+No formulário de novo pedido: o botão "Adicionar produto" clona uma linha de item, a lixeira
+remove a linha (exceto a última) e, a cada mudança, recalcula o subtotal de cada linha e o total
+do pedido (usando o `data-preco` de cada opção). O cálculo é só visual — o servidor usa o preço
+gravado em `produtos`.
 
 ---
 
@@ -837,6 +1062,89 @@ e atualize no banco:
 UPDATE usuarios
 SET SENHA = '$2y$10$...hash_gerado_acima...'
 WHERE EMAIL = 'admin@sistema.com';
+```
+
+---
+
+### 🔗 Consultas com as tabelas relacionadas (JOIN)
+
+**Pedidos com o nome do cliente (INNER JOIN — relacionamento 1:N)**
+```sql
+SELECT p.ID, c.NOME AS cliente, p.STATUS, p.CRIADO_EM
+FROM pedidos p
+INNER JOIN clientes c ON c.ID = p.CLIENTE_ID;
+```
+
+**Todos os clientes e quantos pedidos cada um tem (LEFT JOIN — inclui quem tem 0)**
+```sql
+SELECT c.NOME, COUNT(p.ID) AS qtd_pedidos
+FROM clientes c
+LEFT JOIN pedidos p ON p.CLIENTE_ID = c.ID
+GROUP BY c.ID, c.NOME
+ORDER BY qtd_pedidos DESC;
+```
+
+**Itens de um pedido com o nome do produto (relacionamento N:N via `itens_pedido`)**
+```sql
+SELECT pr.NOME, i.QUANTIDADE, i.PRECO_UNITARIO,
+       i.QUANTIDADE * i.PRECO_UNITARIO AS subtotal
+FROM itens_pedido i
+INNER JOIN produtos pr ON pr.ID = i.PRODUTO_ID
+WHERE i.PEDIDO_ID = 1;
+```
+
+**Total de cada pedido**
+```sql
+SELECT p.ID, c.NOME AS cliente, SUM(i.QUANTIDADE * i.PRECO_UNITARIO) AS total
+FROM pedidos p
+JOIN clientes c     ON c.ID = p.CLIENTE_ID
+JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
+GROUP BY p.ID, c.NOME;
+```
+
+**Consulta juntando as 5 tabelas (a mesma da página Relacionamentos)**
+```sql
+SELECT p.ID AS pedido, c.NOME AS cliente, u.NOME AS registrado_por,
+       pr.NOME AS produto, i.QUANTIDADE, i.QUANTIDADE * i.PRECO_UNITARIO AS subtotal
+FROM pedidos p
+INNER JOIN clientes     c  ON c.ID  = p.CLIENTE_ID
+LEFT  JOIN usuarios     u  ON u.ID  = p.USUARIO_ID
+INNER JOIN itens_pedido i  ON i.PEDIDO_ID = p.ID
+INNER JOIN produtos     pr ON pr.ID = i.PRODUTO_ID
+ORDER BY p.ID;
+```
+
+**Produtos mais vendidos**
+```sql
+SELECT pr.NOME, SUM(i.QUANTIDADE) AS unidades, SUM(i.QUANTIDADE * i.PRECO_UNITARIO) AS faturamento
+FROM produtos pr
+JOIN itens_pedido i ON i.PRODUTO_ID = pr.ID
+JOIN pedidos p      ON p.ID = i.PEDIDO_ID
+WHERE p.STATUS <> 'CANCELADO'
+GROUP BY pr.ID, pr.NOME
+ORDER BY unidades DESC;
+```
+
+**Produtos que nunca foram vendidos**
+```sql
+SELECT pr.NOME
+FROM produtos pr
+LEFT JOIN itens_pedido i ON i.PRODUTO_ID = pr.ID
+WHERE i.ID IS NULL;
+```
+
+**Testando a integridade referencial**
+```sql
+-- Falha com erro 1451: o cliente tem pedidos (ON DELETE RESTRICT)
+DELETE FROM clientes WHERE ID = (SELECT CLIENTE_ID FROM pedidos LIMIT 1);
+
+-- Falha com erro 1452: o cliente 9999 não existe (FK exige um cliente válido)
+INSERT INTO pedidos (CLIENTE_ID) VALUES (9999);
+
+-- Ver todas as chaves estrangeiras do banco
+SELECT CONSTRAINT_NAME, TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE TABLE_SCHEMA = 'mini_sistema' AND REFERENCED_TABLE_NAME IS NOT NULL;
 ```
 
 ---

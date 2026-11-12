@@ -24,6 +24,10 @@ function icone(string $nome, string $classe = ''): string
         'sucesso'       => '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
         'erro'          => '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
         'alerta'        => '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+        'pacote'        => '<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/>',
+        'carrinho'      => '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+        'banco'         => '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+        'olho'          => '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
     ];
 
     $conteudo = $icones[$nome] ?? '';
@@ -45,6 +49,30 @@ function iniciais(string $nome): string
     $primeira = mb_substr($partes[0], 0, 1);
     $ultima = count($partes) > 1 ? mb_substr($partes[count($partes) - 1], 0, 1) : '';
     return mb_strtoupper($primeira . $ultima);
+}
+
+/** Formata um valor em reais (ex.: 1234.5 → "R$ 1.234,50"). */
+function moeda(float $valor): string
+{
+    return 'R$ ' . number_format($valor, 2, ',', '.');
+}
+
+/** Status possíveis de um pedido (valor no banco => rótulo na tela). */
+function status_pedidos(): array
+{
+    return [
+        'ABERTO'    => 'Aberto',
+        'PAGO'      => 'Pago',
+        'ENVIADO'   => 'Enviado',
+        'CANCELADO' => 'Cancelado',
+    ];
+}
+
+/** Etiqueta colorida com o status do pedido. */
+function badge_status(string $status): string
+{
+    $rotulo = status_pedidos()[$status] ?? $status;
+    return '<span class="badge badge-' . strtolower(htmlspecialchars($status)) . '">' . htmlspecialchars($rotulo) . '</span>';
 }
 
 /** Guarda uma mensagem para ser exibida como toast na próxima página carregada. */
