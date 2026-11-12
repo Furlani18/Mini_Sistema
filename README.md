@@ -22,8 +22,8 @@ mini_sistema/
 ├── login.php        # Tela de login (porta de entrada do sistema)
 ├── logout.php       # Encerra a sessão do usuário
 ├── auth.php         # Protege as páginas: exige sessão ativa
-├── sessao.php       # Inicializa a sessão PHP (session_start)
-├── index.php        # Página inicial (requer login)
+├── sessao.php       # Fuso horário (America/Sao_Paulo) + início da sessão PHP
+├── index.php        # Painel inicial: totais, últimos pedidos e estoque baixo (requer login)
 ├── cadastro.php     # Formulário de cadastro (requer login)
 ├── clientes.php     # Lista de clientes (requer login)
 ├── atualizar.php    # Formulário de atualização (requer login)
@@ -37,11 +37,11 @@ mini_sistema/
 ├── pedido_apagar.php # Exclui pedido (itens em cascata)
 ├── relacionamentos.php # Diagrama e explicação das 5 tabelas
 ├── estoque.php      # Baixa/devolução de estoque dos pedidos
-├── header.php       # Cabeçalho, menu e breadcrumb compartilhados
+├── header.php       # Menu lateral (agrupado), usuário logado e breadcrumb
 ├── footer.php       # Rodapé, toasts e modal de exclusão compartilhados
 ├── form_cliente.php # Campos do formulário de cliente (cadastro e atualização)
 ├── validacao.php    # Regras de validação do cliente (servidor)
-├── ui.php           # Ícones SVG, iniciais do avatar e mensagens flash
+├── ui.php           # Ícones SVG, iniciais, moeda, status do pedido e mensagens flash
 ├── css/
 │   └── style.css    # Estilos CSS (inclui tela de login)
 ├── js/
@@ -58,7 +58,7 @@ mini_sistema/
 
 ## 🔐 Login
 
-O sistema inteiro (Home, Cadastro, Listagem, Atualização e Exclusão) fica atrás de uma
+O sistema inteiro (Painel, Clientes, Produtos, Pedidos e Relacionamentos) fica atrás de uma
 tela de login. Todas as páginas protegidas incluem `auth.php`, que verifica se existe uma
 sessão ativa (`$_SESSION['usuario_id']`); se não houver, o usuário é redirecionado para
 `login.php`, e após autenticar é enviado de volta para a página que tentou acessar.
@@ -78,25 +78,32 @@ senha informada com o hash armazenado (`password_hash`/`password_verify`). A tab
 ## 🚀 Como Usar
 
 ### 1. Pré-requisitos
-- PHP 7.0 ou superior instalado
-- Apache e MySQL ativos no XAMPP
+- PHP 7.4 ou superior (o PHP do XAMPP já serve)
+- Apache e MySQL ativos no painel do XAMPP
 - Navegador web moderno
 
-### 2. Iniciar o servidor
+### 2. Criar o banco
 
-Navegue até a pasta do projeto e execute:
+Crie o banco `mini_sistema` (charset `utf8mb4`) e execute os scripts nesta ordem:
 
 ```bash
-cd /Users/karol/Downloads/mini_sistema
-php -S localhost:8000
+C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < usuarios.sql
+C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < clientes.sql
+C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < relacionamentos.sql
 ```
 
 ### 3. Acessar o sistema
 
-Abra seu navegador e acesse:
+Pelo Apache do XAMPP:
 ```
-http://localhost:8000
+http://localhost/mini_sistema/mini_sistema/login.php
 ```
+
+Ou pelo servidor embutido do PHP, dentro da pasta do projeto:
+```bash
+php -S localhost:8000
+```
+e acesse `http://localhost:8000`.
 
 ## 💾 Armazenamento de Dados
 
@@ -115,12 +122,14 @@ Detalhes, regras `ON DELETE` e diagrama na seção 6 da [DOCUMENTACAO.md](DOCUME
 
 ## 🎨 Características
 
-- **Design Responsivo** - Funciona em desktop, tablet e mobile
-- **Interface Intuitiva** - Fácil de navegar e usar
-- **Validações** - Validação de email e nome em tempo real
-- **Formatação de Telefone** - Formatação automática de números de telefone
-- **Mensagens de Feedback** - Alertas visuais de sucesso/erro
-- **Tabela Organizada** - Visualização clara de todos os clientes
+- **Painel inicial** - Totais de clientes, produtos e pedidos, valor vendido, últimos pedidos e estoque baixo
+- **Menu lateral** - Itens agrupados (Geral, Cadastros, Banco de dados), com a página atual destacada
+- **Visual suave** - Fundo cinza-azulado, cartões em off-white e menu azul-marinho
+- **Design Responsivo** - Em telas pequenas o menu vai para o topo e as tabelas viram cartões
+- **Busca instantânea** - Nas listas de clientes, produtos e pedidos, sem recarregar a página
+- **Validações** - Erros mostrados embaixo de cada campo, no navegador e no servidor
+- **Formatação de Telefone** - Máscara automática de números de telefone
+- **Mensagens de Feedback** - Avisos de sucesso/erro que somem sozinhos
 
 ## 📝 Campos do Formulário
 
@@ -136,24 +145,31 @@ Detalhes, regras `ON DELETE` e diagrama na seção 6 da [DOCUMENTACAO.md](DOCUME
 - Proteção contra XSS com `htmlspecialchars()`
 - Validação de dados no cliente e servidor
 - Confirmação de exclusão para evitar remoções acidentais
+- Chaves estrangeiras impedem apagar cliente com pedidos ou produto já vendido
+- Pedido, itens e estoque gravados em uma única transação (ou tudo, ou nada)
 
 ## 📱 Navegação
 
-- **Login** - Tela de acesso ao sistema (obrigatória)
-- **Home** - Página inicial com informações gerais
-- **Cadastrar Cliente** - Formulário para adicionar novo cliente
-- **Listar Clientes** - Tabela com todos os clientes cadastrados (com a quantidade de pedidos)
-- **Produtos** - Cadastro e lista de produtos
-- **Pedidos** - Lista de pedidos, novo pedido e detalhes
-- **Relacionamentos** - Diagrama das tabelas e seus relacionamentos
-- **Sair** - Encerra a sessão e retorna à tela de login
+O menu lateral é dividido em três grupos:
+
+- **Geral**
+  - **Painel** - Página inicial com os indicadores e atalhos
+- **Cadastros**
+  - **Clientes** - Lista com busca e quantidade de pedidos; botão "Novo Cliente" para cadastrar
+  - **Produtos** - Lista com busca, preço, estoque e vendidos; botão "Novo Produto"
+  - **Pedidos** - Lista com busca e filtro por cliente; "Novo Pedido" e detalhes de cada pedido
+- **Banco de dados**
+  - **Relacionamentos** - Diagrama das tabelas, explicação dos relacionamentos e consulta ao vivo
+
+No rodapé do menu aparecem o usuário logado e o botão **Sair**. Antes de entrar, a tela de
+**Login** é obrigatória.
 
 ## 🛠️ Tecnologias Utilizadas
 
 - **Frontend**: HTML5, CSS3, JavaScript
-- **Backend**: PHP
-- **Armazenamento**: MySQL (PDO)
-- **Design**: Responsivo e moderno com gradientes
+- **Backend**: PHP (puro, sem framework)
+- **Armazenamento**: MySQL/MariaDB com InnoDB (PDO, chaves estrangeiras e transações)
+- **Design**: Responsivo, com menu lateral e variáveis CSS
 
 ## 📞 Suporte
 

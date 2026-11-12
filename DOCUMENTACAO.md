@@ -31,11 +31,11 @@ Todo o sistema fica protegido por uma tela de **login** baseada em sessão PHP.
 |----------------|-----------------|------------------------|
 | Login          | `login.php`     | `SELECT`               |
 | Logout         | `logout.php`    | —                      |
-| Home           | `index.php`     | —                      |
+| Painel (início) | `index.php`    | `SELECT` com subconsultas (totais, últimos pedidos, estoque baixo) |
 | Cadastrar      | `cadastro.php`  | `INSERT`               |
-| Listar/Buscar  | `clientes.php`  | `SELECT`               |
+| Listar/Buscar  | `clientes.php`  | `SELECT` + `LEFT JOIN pedidos` (qtd. de pedidos) |
 | Atualizar      | `atualizar.php` | `SELECT` + `UPDATE`    |
-| Apagar         | `apagar.php`    | `SELECT` + `DELETE`    |
+| Apagar         | `apagar.php`    | `SELECT` + `DELETE` (recusado se o cliente tiver pedidos) |
 | Cadastrar/editar produto | `produto_cadastro.php` | `INSERT` / `SELECT` + `UPDATE` |
 | Listar/Buscar produtos | `produtos.php` | `SELECT` + `LEFT JOIN` |
 | Apagar produto | `produto_apagar.php` | `SELECT` + `DELETE` |
@@ -96,6 +96,9 @@ C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < relacionamentos.sql
 
 Os três scripts podem ser executados mais de uma vez sem duplicar tabelas nem dados.
 
+> O `relacionamentos.sql` começa com `SET NAMES utf8mb4`: sem isso, o cliente `mysql` do Windows
+> importaria os acentos com outro charset e gravaria "mecÃ¢nico" no lugar de "mecânico".
+
 ### 3.3 Acessar
 
 - Via Apache do XAMPP: `http://localhost/mini_sistema/mini_sistema/login.php`
@@ -125,11 +128,11 @@ Os dados de conexão ficam em [conexao.php](conexao.php):
 ```
 mini_sistema/
 ├── conexao.php      # Cria o objeto $pdo (conexão com o banco)
-├── sessao.php       # Inicia a sessão PHP, se ainda não iniciada
+├── sessao.php       # Define o fuso horário (America/Sao_Paulo) e inicia a sessão
 ├── auth.php         # "Guarda" das páginas: exige usuário logado
 ├── login.php        # Formulário e processamento do login
 ├── logout.php       # Destrói a sessão e volta ao login
-├── index.php        # Página inicial (Home)
+├── index.php        # Painel inicial: totais, últimos pedidos e estoque baixo
 ├── cadastro.php     # Formulário de cadastro de cliente (INSERT)
 ├── clientes.php     # Listagem + busca de clientes (SELECT)
 ├── atualizar.php    # Edição de cliente (SELECT + UPDATE)
@@ -143,7 +146,7 @@ mini_sistema/
 ├── pedido_apagar.php # Exclusão de pedido (itens apagados em cascata)
 ├── relacionamentos.php # Diagrama e explicação das 5 tabelas + consulta ao vivo
 ├── estoque.php      # devolver_estoque() e baixar_estoque()
-├── header.php       # Cabeçalho, menu e breadcrumb compartilhados
+├── header.php       # Menu lateral (agrupado), usuário logado e breadcrumb
 ├── footer.php       # Rodapé, toasts e modal de exclusão compartilhados
 ├── form_cliente.php # Campos do formulário de cliente (cadastro e atualização)
 ├── validacao.php    # validar_cliente(): regras de validação no servidor
@@ -176,10 +179,15 @@ O projeto segue o modelo **"uma página PHP = uma tela"**: cada arquivo processa
 ```
 página protegida (ex.: clientes.php)
    ├── require auth.php
-   │      └── require sessao.php  → session_start()
+   │      └── require sessao.php  → date_default_timezone_set('America/Sao_Paulo') + session_start()
    │      └── sem $_SESSION['usuario_id']? → redireciona p/ login.php?redirect=clientes.php
-   └── require conexao.php        → $pdo pronto para uso
+   ├── require conexao.php        → $pdo pronto para uso
+   ├── include header.php         → menu lateral + breadcrumb
+   └── include footer.php         → rodapé, toasts, modal de exclusão e js/app.js
 ```
+
+> As variáveis internas do `header.php` usam o prefixo `menu` (`$menuLinks`, `$menuHref`...)
+> para não sobrescrever variáveis da página que o inclui (ex.: `$itens` em `pedido_ver.php`).
 
 ### 5.2 Fluxo de login
 
@@ -209,8 +217,22 @@ cadastro.php  ──POST──► validar_cliente() ──► INSERT ──► t
 clientes.php  ──GET───► SELECT ... ORDER BY ID DESC ──► tabela + busca JS
    ├── ✏️ Editar  → atualizar.php?id=N ──GET──► SELECT por ID
    │                                   ──POST─► UPDATE por ID
-   └── Apagar → modal de confirmação → apagar.php?id=N ──► SELECT + DELETE
-                                                    └► flash() + redireciona → clientes.php (toast)
+   └── Apagar → modal de confirmação → apagar.php?id=N ──► SELECT c.NOME, COUNT(p.ID) (LEFT JOIN pedidos)
+                                                    ├► tem pedidos? → flash(erro), nada é apagado
+                                                    └► senão DELETE → flash(sucesso)
+                                                       → redireciona → clientes.php (toast)
+```
+
+### 5.3.1 Fluxo do pedido
+
+```
+pedido_novo.php ──POST──► valida cliente, status e itens
+   └── beginTransaction()
+         ├── INSERT INTO pedidos (CLIENTE_ID, USUARIO_ID = usuário logado, ...)
+         ├── INSERT INTO itens_pedido ... SELECT preço atual FROM produtos   (1 por produto)
+         ├── baixar_estoque()  → SELECT ... FOR UPDATE + UPDATE produtos
+         ├── faltou estoque? → rollBack() (nada é gravado) + mensagem de erro
+         └── tudo certo      → commit() → pedido_ver.php?id=N (toast)
 ```
 
 ### 5.4 Variáveis de sessão
@@ -218,7 +240,7 @@ clientes.php  ──GET───► SELECT ... ORDER BY ID DESC ──► tabela
 | Chave                       | Conteúdo                         |
 |-----------------------------|----------------------------------|
 | `$_SESSION['usuario_id']`   | ID do usuário logado             |
-| `$_SESSION['usuario_nome']` | Nome exibido no cabeçalho        |
+| `$_SESSION['usuario_nome']` | Nome exibido no menu lateral e na saudação do painel |
 | `$_SESSION['usuario_email']`| Email do usuário logado          |
 
 ---
@@ -436,8 +458,9 @@ Cria a instância `$pdo` com três opções importantes:
 Se a conexão falhar, responde HTTP 500 com uma mensagem amigável.
 
 ### [sessao.php](sessao.php)
-Chama `session_start()` somente se a sessão ainda não foi iniciada, evitando *warnings* quando
-incluído mais de uma vez.
+Define o fuso horário `America/Sao_Paulo` (o PHP do XAMPP vem configurado como `Europe/Berlin`,
+o que faria a data do painel virar o dia por volta das 19h) e chama `session_start()` somente se
+a sessão ainda não foi iniciada, evitando *warnings* quando incluído mais de uma vez.
 
 ### [auth.php](auth.php)
 Incluído no topo de toda página protegida. Se não existir `$_SESSION['usuario_id']`, redireciona
@@ -453,10 +476,28 @@ para `login.php?redirect=<página atual>` e encerra o script com `exit`.
 Esvazia `$_SESSION`, expira o cookie de sessão, chama `session_destroy()` e volta ao login.
 
 ### [index.php](index.php)
-Página inicial: mensagem de boas-vindas, imagem, atalhos (Novo Cliente, Novo Pedido, Ver
-Relacionamentos) e os cards de funcionalidades em três grupos — **Clientes**, **Produtos** e
-**Pedidos** —, cada um com Cadastrar, Listar, Atualizar e Apagar. Os cards são gerados a partir do
-array `$grupos`.
+Painel inicial, organizado em três partes:
+- **Cabeçalho da página:** data por extenso, "Olá, <primeiro nome>!", imagem de boas-vindas e os
+  botões **Relacionamentos** e **Novo Pedido**.
+- **Visão geral:** um cartão por módulo (Clientes, Produtos, Pedidos) com o total de registros, um
+  indicador próprio (clientes que já fizeram pedido; produtos com estoque baixo; valor vendido e
+  pedidos abertos) e os atalhos **Cadastrar** e **Ver lista**. Os cartões vêm do array `$modulos`.
+- **Atividade recente:** os 5 últimos pedidos (`pedidos ⨝ clientes ⨝ itens_pedido`) e os produtos
+  com estoque até `ESTOQUE_BAIXO` (5) unidades.
+
+Todos os números vêm de uma única consulta com subconsultas (`SELECT (SELECT COUNT(*) ...), ...`).
+
+### [header.php](header.php)
+Menu lateral fixo à esquerda, com os itens agrupados em **Geral** (Painel), **Cadastros**
+(Clientes, Produtos, Pedidos) e **Banco de dados** (Relacionamentos). O array `$secoes` liga as
+páginas internas ao item do menu (ex.: `cadastro.php` e `atualizar.php` → "Clientes"), que fica
+destacado. No rodapé do menu aparecem as iniciais e o nome do usuário logado e o botão de sair.
+Abaixo do menu, cada página exibe o breadcrumb definido em `$breadcrumb` (ex.: Painel › Clientes ›
+Atualizar Cliente). Em telas de até 900 px, o menu vira uma barra no topo.
+
+### [footer.php](footer.php)
+Rodapé, área dos toasts (mensagens de `flash()` e da própria página) e o modal genérico
+"Confirmar exclusão", usado por clientes, produtos e pedidos.
 
 ### [cadastro.php](cadastro.php)
 Recebe `nome`, `email` e `telefone` por `POST`, valida campos obrigatórios (nome e email) e
@@ -544,10 +585,21 @@ chaves estrangeiras e `CHECK`s, e insere dados de exemplo apenas se ainda não e
 ### 8.1 [css/style.css](css/style.css)
 Folha de estilo única para todas as telas, com fonte Arial. As cores, espaçamentos (`--space-1`
 a `--space-6`), raios (`--radius-*`) e sombras (`--shadow-*`) ficam em variáveis no `:root`.
-Inclui cabeçalho/breadcrumb, cards, formulários com erro por campo (`.has-error`), tabela que
-vira cartões no celular, alertas, toasts (`.toast`), modal (`.modal`), botões (`.btn-primary`,
-`.btn-secondary`, `.btn-outline`, `.btn-danger`, `.btn-danger-outline`, `.btn-icon`, `.btn-sm`)
-e a tela de login.
+
+**Paleta:** fundo da página cinza-azulado (`--page-bg: #e3e9ef`), cartões em off-white
+(`--surface: #f8fafc`, menos ofuscante que branco puro) e menu lateral azul-marinho
+(`--header-bg`, `--header-text`, `--header-muted`). A largura do menu fica em `--sidebar-w`.
+
+**Layout:** `.sidebar` é fixa à esquerda e o `.container` ganha `margin-left` igual à largura do
+menu; `main`, `footer` e `.breadcrumb` ficam centralizados com até 1180 px (o modal e os toasts
+não entram nessa regra, pois têm posição própria). Abaixo de 900 px, o menu passa para o topo.
+
+**Componentes:** menu lateral (`.nav-grupo`, `.nav-link.active`), breadcrumb, painel
+(`.page-head`, `.secao-titulo`, `.modulo`, `.painel`), formulários com erro por campo
+(`.has-error`), tabelas que viram cartões no celular, etiquetas de status (`.badge-*`), itens do
+pedido (`.item-linha`), diagrama da página de relacionamentos (`.er-*`), alertas, toasts
+(`.toast`), modal (`.modal`), botões (`.btn-primary`, `.btn-secondary`, `.btn-outline`,
+`.btn-danger`, `.btn-danger-outline`, `.btn-icon`, `.btn-sm`) e a tela de login.
 
 ### 8.2 [js/formulario.js](js/formulario.js)
 Usado por qualquer `<form data-validar>` (cadastro e atualização). As regras são as mesmas de
@@ -588,8 +640,12 @@ gravado em `produtos`.
 | Regeneração do ID de sessão no login     | `login.php` (`session_regenerate_id`)  |
 | Escape de saída (anti XSS)               | `htmlspecialchars()` nos dados exibidos |
 | Validação do `redirect` (anti open redirect) | `login.php` (regex)                 |
-| Conversão do `id` para inteiro           | `atualizar.php`, `apagar.php`          |
+| Conversão do `id` para inteiro           | Páginas de atualização, detalhe e exclusão |
 | Confirmação antes de excluir             | Modal em `js/app.js` (`data-confirmar-exclusao`) |
+| Chaves estrangeiras com `ON DELETE` (integridade referencial) | `relacionamentos.sql`, `apagar.php`, `produto_apagar.php` |
+| Restrições `CHECK` (preço, estoque e quantidade não negativos) | `relacionamentos.sql` |
+| Transações (`commit` / `rollBack`): o pedido nunca fica gravado pela metade | `pedido_novo.php`, `pedido_ver.php`, `pedido_apagar.php` |
+| `SELECT ... FOR UPDATE`: dois pedidos simultâneos não vendem a mesma unidade | `estoque.php` |
 
 ---
 
@@ -621,12 +677,20 @@ SELECT NOME, EMAIL, TELEFONE FROM usuarios
 WHERE EMAIL <> 'admin@sistema.com';
 ```
 
-### 10.2 Outras melhorias
-- Validar o formato do email também no servidor (`filter_var($email, FILTER_VALIDATE_EMAIL)`).
-- Exclusão via `GET` pode ser disparada por um link externo (CSRF). O ideal é excluir via
-  `POST` com um token CSRF.
-- Tratar email duplicado (capturar `PDOException` código `23000`).
+### 10.2 ✅ Já implementado
+- Validação do formato do email no servidor (`filter_var($email, FILTER_VALIDATE_EMAIL)`).
+- Nome de produto duplicado tratado (captura da `PDOException` código `23000`).
+- Exclusão de cliente com pedidos e de produto já vendido recusada com aviso.
+- Fuso horário `America/Sao_Paulo` e `SET NAMES utf8mb4` no script SQL.
+
+### 10.3 Melhorias sugeridas
+- As exclusões e a mudança de status podem ser disparadas por um link externo (CSRF). O ideal é
+  usar `POST` com um token CSRF.
+- Tratar email duplicado de **clientes** (capturar `PDOException` código `23000`), como já é feito
+  com os nomes de produtos.
 - Remover a dica de credenciais padrão da tela de login em produção.
+- Paginar as listagens quando o volume de registros crescer.
+- Criar perfis de acesso (ex.: só administradores excluem pedidos).
 
 ---
 
