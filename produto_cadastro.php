@@ -7,6 +7,27 @@ require_once 'ui.php';
 //   produto_cadastro.php         → novo produto (INSERT)
 //   produto_cadastro.php?id=ID   → editar produto existente (UPDATE)
 
+// Maior valor que cabe na coluna PRECO DECIMAL(10,2)
+const PRECO_MAXIMO = 99999999.99;
+
+/**
+ * Converte o preço digitado em número. Aceita "1.499,90" (formato da máscara),
+ * "1499,90", "1499.90" e "1.500" (ponto como milhar). Retorna null se for inválido.
+ */
+function converter_preco(string $texto): ?float
+{
+    $texto = str_replace(['R$', ' '], '', $texto);
+    if (strpos($texto, ',') !== false) {
+        $texto = str_replace(['.', ','], ['', '.'], $texto);   // "1.499,90" → "1499.90"
+    } elseif (!preg_match('/^\d+\.\d{1,2}$/', $texto)) {
+        $texto = str_replace('.', '', $texto);                  // "1.500" → "1500"
+    }
+    if (!preg_match('/^\d+(\.\d{1,2})?$/', $texto)) {
+        return null;
+    }
+    return round((float)$texto, 2);
+}
+
 $erros = [];
 $toasts = [];
 $vazio = ['nome' => '', 'descricao' => '', 'preco' => '', 'estoque' => '0'];
@@ -25,7 +46,7 @@ if ($id > 0) {
     $valores = [
         'nome'      => $produto['NOME'],
         'descricao' => $produto['DESCRICAO'] ?? '',
-        'preco'     => number_format((float)$produto['PRECO'], 2, ',', ''),
+        'preco'     => number_format((float)$produto['PRECO'], 2, ',', '.'),
         'estoque'   => (string)$produto['ESTOQUE'],
     ];
 }
@@ -39,23 +60,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'estoque'   => trim($_POST['estoque'] ?? ''),
     ];
 
-    // Aceita "1.234,50", "1234,50" e "1234.50"
-    $precoTexto = strpos($valores['preco'], ',') !== false
-        ? str_replace(['.', ','], ['', '.'], $valores['preco'])
-        : $valores['preco'];
+    $preco = converter_preco($valores['preco']);
 
     if (mb_strlen($valores['nome']) < 2) {
         $erros['nome'] = 'Informe o nome do produto (mínimo 2 caracteres).';
     }
-    if (!is_numeric($precoTexto) || (float)$precoTexto < 0) {
-        $erros['preco'] = 'Informe um preço válido, por exemplo 199,90.';
+    if ($preco === null) {
+        $erros['preco'] = 'Informe um preço válido, por exemplo 1.499,90.';
+    } elseif ($preco > PRECO_MAXIMO) {
+        $erros['preco'] = 'O preço máximo é R$ 99.999.999,99.';
     }
     if (!ctype_digit($valores['estoque'])) {
         $erros['estoque'] = 'O estoque deve ser um número inteiro maior ou igual a zero.';
     }
 
     if (!$erros) {
-        $dados = [$valores['nome'], $valores['descricao'] ?: null, round((float)$precoTexto, 2), (int)$valores['estoque']];
+        $dados = [$valores['nome'], $valores['descricao'] ?: null, $preco, (int)$valores['estoque']];
         try {
             if ($editando) {
                 $stmt = $pdo->prepare('UPDATE produtos SET NOME = ?, DESCRICAO = ?, PRECO = ?, ESTOQUE = ? WHERE ID = ?');
@@ -79,7 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $campos = [
     'nome'      => ['Nome', true, 'type="text" maxlength="100" placeholder="Ex.: Mouse sem fio"', 'Nome único do produto.'],
     'descricao' => ['Descrição', false, 'type="text" maxlength="255" placeholder="Opcional"', 'Opcional. Detalhes do produto.'],
-    'preco'     => ['Preço (R$)', true, 'type="text" inputmode="decimal" placeholder="0,00"', 'Use vírgula para os centavos, ex.: 199,90.'],
+    'preco'     => ['Preço (R$)', true, 'type="text" inputmode="numeric" placeholder="0,00" data-mascara-moeda autocomplete="off"',
+                    'Digite só os números; os centavos entram automaticamente (ex.: 149990 → 1.499,90).'],
     'estoque'   => ['Estoque', true, 'type="number" min="0" step="1"', 'Quantidade disponível para venda.'],
 ];
 $titulo = $editando ? 'Editar Produto' : 'Cadastrar Produto';
@@ -146,5 +167,6 @@ $titulo = $editando ? 'Editar Produto' : 'Cadastrar Produto';
 
         <?php include __DIR__ . '/footer.php'; ?>
     </div>
+    <script src="js/moeda.js"></script>
 </body>
 </html>

@@ -48,7 +48,8 @@ mini_sistema/
 │   ├── app.js        # Toasts e modal de confirmação de exclusão
 │   ├── formulario.js # Validação e máscara dos formulários de cliente
 │   ├── busca.js      # Busca instantânea nas listas (clientes, produtos, pedidos)
-│   └── pedido.js     # Itens e total do formulário de pedido
+│   ├── pedido.js     # Itens e total do formulário de pedido
+│   └── moeda.js      # Máscara de reais do campo de preço
 ├── imagens/         # Pasta para armazenar imagens
 ├── conexao.php      # Conexão com o banco mini_sistema
 ├── usuarios.sql     # Script de criação da tabela `usuarios` + usuário padrão

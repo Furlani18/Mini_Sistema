@@ -160,7 +160,8 @@ mini_sistema/
 │   ├── app.js        # Toasts e modal de confirmação de exclusão
 │   ├── formulario.js # Validação/máscara dos formulários de cliente
 │   ├── busca.js     # Busca instantânea nas listas (clientes, produtos e pedidos)
-│   └── pedido.js    # Linhas de itens e total do formulário de pedido
+│   ├── pedido.js    # Linhas de itens e total do formulário de pedido
+│   └── moeda.js     # Máscara de reais do campo de preço (aceita milhares e milhões)
 ├── imagens/
 │   └── bem-vindo.jpeg
 ├── README.md        # Resumo do projeto
@@ -522,9 +523,12 @@ mensagem aparece como toast. A confirmação acontece antes, no modal aberto por
 
 ### [produto_cadastro.php](produto_cadastro.php)
 Formulário de produto, no mesmo modelo do cadastro de cliente. Sem `id` faz `INSERT` (e limpa o
-formulário para o próximo); com `?id=ID` carrega o produto e o `POST` faz `UPDATE`. Aceita preço
-como `1.234,50` ou `1234.50`. Nome duplicado (erro `23000` da chave `UNIQUE`) vira mensagem no
-campo. Produto inexistente volta para a lista com um aviso.
+formulário para o próximo); com `?id=ID` carrega o produto e o `POST` faz `UPDATE`. O preço é
+convertido por `converter_preco()`, que aceita `1.499,90` (formato da máscara), `1499,90`,
+`1499.90` e `1.500` (ponto como milhar, não como decimal), e é limitado a `PRECO_MAXIMO`
+(R$ 99.999.999,99, o máximo da coluna `DECIMAL(10,2)`). Na edição, o preço aparece com separador
+de milhar. Nome duplicado (erro `23000` da chave `UNIQUE`) vira mensagem no campo. Produto
+inexistente volta para a lista com um aviso.
 
 ### [produtos.php](produtos.php)
 Lista de produtos no mesmo formato da lista de clientes: busca instantânea, contador, botões de
@@ -628,6 +632,12 @@ No formulário de novo pedido: o botão "Adicionar produto" clona uma linha de i
 remove a linha (exceto a última) e, a cada mudança, recalcula o subtotal de cada linha e o total
 do pedido (usando o `data-preco` de cada opção). O cálculo é só visual — o servidor usa o preço
 gravado em `produtos`.
+
+### 8.5 [js/moeda.js](js/moeda.js)
+Máscara de reais para campos com `data-mascara-moeda` (o preço do produto). O usuário digita só os
+números e o valor se forma da direita para a esquerda, como em uma calculadora: `1` → `0,01`,
+`150000` → `1.500,00`, `100000000` → `1.000.000,00`. Aceita até 10 dígitos (R$ 99.999.999,99) e
+formata também o valor que já vem preenchido na edição (`3499,90` → `3.499,90`).
 
 ---
 
