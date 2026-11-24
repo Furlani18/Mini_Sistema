@@ -90,7 +90,7 @@ $total = array_sum(array_column($itens, 'SUBTOTAL'));
                     <div>
                         <dt>Cliente <small class="text-muted">(tabela clientes)</small></dt>
                         <dd>
-                            <a href="pedidos.php?cliente=<?php echo $pedido['CLIENTE_ID']; ?>" class="text-link"><?php echo htmlspecialchars($pedido['CLIENTE']); ?></a><br>
+                            <a href="cliente_ver.php?id=<?php echo $pedido['CLIENTE_ID']; ?>" class="text-link"><?php echo htmlspecialchars($pedido['CLIENTE']); ?></a><br>
                             <span class="text-muted"><?php echo htmlspecialchars($pedido['CLIENTE_EMAIL']); ?><?php echo $pedido['CLIENTE_TELEFONE'] ? ' · ' . htmlspecialchars($pedido['CLIENTE_TELEFONE']) : ''; ?></span>
                         </dd>
                     </div>

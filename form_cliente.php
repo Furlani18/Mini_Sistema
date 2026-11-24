@@ -25,24 +25,5 @@ $campos = [
         'ajuda'       => 'Opcional. Digite apenas números; a formatação é aplicada automaticamente.',
     ],
 ];
-?>
-<?php foreach ($campos as $campo => $c): ?>
-    <?php $erro = $erros[$campo] ?? ''; ?>
-    <div class="form-group<?php echo $erro ? ' has-error' : ''; ?>">
-        <label for="<?php echo $campo; ?>">
-            <?php echo $c['rotulo']; ?>
-            <?php if ($c['obrigatorio']): ?><span class="required" aria-hidden="true">*</span><?php endif; ?>
-        </label>
-        <input
-            id="<?php echo $campo; ?>"
-            name="<?php echo $campo; ?>"
-            value="<?php echo htmlspecialchars($valores[$campo] ?? ''); ?>"
-            aria-describedby="<?php echo $campo; ?>-ajuda <?php echo $campo; ?>-erro"
-            <?php echo $c['atributos']; ?>
-            <?php echo $c['obrigatorio'] ? 'required' : ''; ?>
-            <?php echo $erro ? 'aria-invalid="true"' : ''; ?>
-        >
-        <small class="field-help" id="<?php echo $campo; ?>-ajuda"><?php echo $c['ajuda']; ?></small>
-        <small class="field-error" id="<?php echo $campo; ?>-erro"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erro); ?></span></small>
-    </div>
-<?php endforeach; ?>
+
+include __DIR__ . '/form_campos.php';

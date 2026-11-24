@@ -14,6 +14,9 @@ $secoes = [
     'cadastro.php'         => 'clientes.php',
     'atualizar.php'        => 'clientes.php',
     'apagar.php'           => 'clientes.php',
+    'cliente_ver.php'      => 'clientes.php',
+    'usuario_cadastro.php' => 'usuarios.php',
+    'usuario_apagar.php'   => 'usuarios.php',
     'produto_cadastro.php' => 'produtos.php',
     'produto_apagar.php'   => 'produtos.php',
     'pedido_novo.php'      => 'pedidos.php',
@@ -25,15 +28,17 @@ $secaoAtiva = $secoes[$paginaAtual] ?? $paginaAtual;
 // Menu agrupado: título do grupo => [arquivo => [ícone, rótulo]]
 $menu = [
     'Geral' => [
-        'index.php' => ['home', 'Painel'],
+        'index.php'      => ['home', 'Painel'],
+        'relatorios.php' => ['grafico', 'Relatórios'],
     ],
     'Cadastros' => [
         'clientes.php' => ['usuarios', 'Clientes'],
         'produtos.php' => ['pacote', 'Produtos'],
         'pedidos.php'  => ['carrinho', 'Pedidos'],
     ],
-    'Banco de dados' => [
-        'relacionamentos.php' => ['banco', 'Relacionamentos'],
+    'Administração' => [
+        'usuarios.php'        => ['escudo', 'Usuários'],
+        'relacionamentos.php' => ['banco', 'Banco de dados'],
     ],
 ];
 
@@ -59,12 +64,15 @@ $breadcrumb = $breadcrumb ?? [];
         <?php endforeach; ?>
     </nav>
 
-    <div class="sidebar-user">
-        <span class="sidebar-avatar" aria-hidden="true"><?php echo htmlspecialchars(iniciais($nomeUsuario ?: '?')); ?></span>
-        <span class="sidebar-user-info">
-            <strong><?php echo htmlspecialchars($nomeUsuario); ?></strong>
-            <small>Usuário logado</small>
-        </span>
+    <div class="sidebar-user<?php echo $paginaAtual === 'perfil.php' ? ' active' : ''; ?>">
+        <a href="perfil.php" class="sidebar-user-link" title="Meu perfil"
+           <?php echo $paginaAtual === 'perfil.php' ? 'aria-current="page"' : ''; ?>>
+            <span class="sidebar-avatar" aria-hidden="true"><?php echo htmlspecialchars(iniciais($nomeUsuario ?: '?')); ?></span>
+            <span class="sidebar-user-info">
+                <strong><?php echo htmlspecialchars($nomeUsuario); ?></strong>
+                <small>Meu perfil</small>
+            </span>
+        </a>
         <a href="logout.php" class="sidebar-sair" title="Sair" aria-label="Sair do sistema"><?php echo icone('sair'); ?></a>
     </div>
 </header>

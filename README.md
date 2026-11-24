@@ -14,6 +14,10 @@ Um sistema CRUD (Create, Read, Update, Delete) simples e intuitivo para gerencia
 - 📦 **Produtos** - Cadastre, edite e apague produtos (preço e estoque)
 - 🛒 **Pedidos** - Registre pedidos de um cliente com vários produtos, altere o status e veja o total
 - 🗂️ **Relacionamentos** - Página com o diagrama das 5 tabelas, seus relacionamentos e uma consulta ao vivo
+- 👤 **Ficha do cliente** - Histórico de pedidos, total gasto, ticket médio, última compra e produtos mais comprados
+- 📊 **Relatórios** - Faturamento por mês/dia, pedidos por status, produtos mais vendidos e melhores clientes, com filtro de período, comparação com o período anterior e exportação em CSV (abre no Excel)
+- 🔎 **Filtros e paginação** - Busca no banco, ordenação clicando no cabeçalho das colunas, filtros (status, período, estoque) e paginação em todas as listas
+- 🛡️ **Usuários** - Cadastre, edite e remova quem acessa o sistema; em "Meu perfil" cada um altera os próprios dados e a senha
 
 ## 📁 Estrutura do Projeto
 
@@ -25,29 +29,39 @@ mini_sistema/
 ├── sessao.php       # Fuso horário (America/Sao_Paulo) + início da sessão PHP
 ├── index.php        # Painel inicial: totais, últimos pedidos e estoque baixo (requer login)
 ├── cadastro.php     # Formulário de cadastro (requer login)
-├── clientes.php     # Lista de clientes (requer login)
+├── clientes.php     # Lista de clientes com busca, ordenação e paginação (requer login)
+├── cliente_ver.php  # Ficha do cliente: indicadores, histórico e produtos favoritos
 ├── atualizar.php    # Formulário de atualização (requer login)
 ├── apagar.php       # Exclui o cliente e volta para a lista (requer login)
 ├── produto_cadastro.php # Cadastro/edição de produto
-├── produtos.php     # Lista de produtos com busca
+├── produtos.php     # Lista de produtos com busca, filtro de estoque e paginação
 ├── produto_apagar.php # Exclui produto (se nunca foi vendido)
-├── pedidos.php      # Lista de pedidos
+├── pedidos.php      # Lista de pedidos com filtros (status, período, cliente) e paginação
 ├── pedido_novo.php  # Registro de pedido com itens
 ├── pedido_ver.php   # Detalhes do pedido e mudança de status
 ├── pedido_apagar.php # Exclui pedido (itens em cascata)
 ├── relacionamentos.php # Diagrama e explicação das 5 tabelas
+├── relatorios.php   # Relatórios de vendas com gráficos
+├── relatorios_funcoes.php # Período e consultas dos relatórios
+├── relatorio_exportar.php # Exporta pedidos/produtos/clientes do período em CSV
+├── usuarios.php     # Lista de usuários do sistema
+├── usuario_cadastro.php # Cadastro/edição de usuário (com senha)
+├── usuario_apagar.php # Exclui usuário (não o próprio; pedidos são mantidos)
+├── perfil.php       # Meu perfil: dados pessoais e troca de senha
+├── lista.php        # Ordenação, paginação e filtros compartilhados pelas listas
 ├── estoque.php      # Baixa/devolução de estoque dos pedidos
 ├── header.php       # Menu lateral (agrupado), usuário logado e breadcrumb
 ├── footer.php       # Rodapé, toasts e modal de exclusão compartilhados
 ├── form_cliente.php # Campos do formulário de cliente (cadastro e atualização)
-├── validacao.php    # Regras de validação do cliente (servidor)
+├── form_campos.php  # Renderiza campos de formulário (cliente, usuário e perfil)
+├── validacao.php    # Regras de validação de cliente, usuário e senha (servidor)
 ├── ui.php           # Ícones SVG, iniciais, moeda, status do pedido e mensagens flash
 ├── css/
 │   └── style.css    # Estilos CSS (inclui tela de login)
 ├── js/
-│   ├── app.js        # Toasts e modal de confirmação de exclusão
-│   ├── formulario.js # Validação e máscara dos formulários de cliente
-│   ├── busca.js      # Busca instantânea nas listas (clientes, produtos, pedidos)
+│   ├── app.js        # Toasts, modal de exclusão e filtros que se aplicam sozinhos
+│   ├── formulario.js # Validação e máscara dos formulários de cliente e usuário
+│   ├── relatorios.js # Dicas (tooltip) do gráfico de faturamento
 │   ├── pedido.js     # Itens e total do formulário de pedido
 │   └── moeda.js      # Máscara de reais do campo de preço
 ├── imagens/         # Pasta para armazenar imagens

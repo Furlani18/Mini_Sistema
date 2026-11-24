@@ -1,11 +1,26 @@
 // Comportamentos compartilhados por todas as páginas internas:
 // - toasts (mensagens que somem sozinhas)
 // - modal de confirmação de exclusão
+// - filtros que se aplicam sozinhos (select com data-auto-submit)
 
 document.addEventListener("DOMContentLoaded", function () {
   configurarToasts();
   configurarModalExclusao();
+  configurarAutoEnvio();
 });
+
+/* ---------- Filtros: enviar o formulário ao trocar a opção ---------- */
+
+function configurarAutoEnvio() {
+  document.querySelectorAll("select[data-auto-submit]").forEach(function (select) {
+    select.addEventListener("change", function () {
+      // Ao mudar um filtro, volta para a página 1 da lista
+      const pagina = select.form.querySelector('input[name="pagina"]');
+      if (pagina) pagina.remove();
+      select.form.submit();
+    });
+  });
+}
 
 /* ---------- Toasts ---------- */
 

@@ -6,7 +6,6 @@ require_once __DIR__ . '/ui.php';
 
 // Painel inicial: números de cada módulo, últimos pedidos e produtos com estoque baixo.
 
-const ESTOQUE_BAIXO = 5;
 
 $numeros = $pdo->query(
     "SELECT
@@ -92,7 +91,7 @@ $modulos = [
             <p>Resumo de clientes, produtos e pedidos do sistema.</p>
           </div>
           <div class="page-head-acoes">
-            <a href="relacionamentos.php" class="btn btn-outline"><?php echo icone('banco'); ?> Relacionamentos</a>
+            <a href="relatorios.php" class="btn btn-outline"><?php echo icone('grafico'); ?> Relatórios</a>
             <a href="pedido_novo.php" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Pedido</a>
           </div>
         </div>
