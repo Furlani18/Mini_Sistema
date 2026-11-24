@@ -2,12 +2,44 @@
 // - toasts (mensagens que somem sozinhas)
 // - modal de confirmação de exclusão
 // - filtros que se aplicam sozinhos (select com data-auto-submit)
+// - botão de modo claro/escuro (a escolha fica salva no navegador)
 
 document.addEventListener("DOMContentLoaded", function () {
   configurarToasts();
   configurarModalExclusao();
   configurarAutoEnvio();
+  configurarTema();
 });
+
+/* ---------- Modo claro / escuro ---------- */
+
+function configurarTema() {
+  const botao = document.querySelector("[data-alternar-tema]");
+  if (!botao) return;
+  const raiz = document.documentElement;
+
+  function atualizarRotulo() {
+    const escuro = raiz.getAttribute("data-tema") === "escuro";
+    botao.setAttribute("aria-pressed", escuro ? "true" : "false");
+    botao.title = escuro ? "Mudar para o modo claro" : "Mudar para o modo escuro";
+  }
+
+  botao.addEventListener("click", function () {
+    const escuro = raiz.getAttribute("data-tema") !== "escuro";
+    // Classe temporária: anima só as cores durante a troca
+    raiz.classList.add("tema-transicao");
+    if (escuro) {
+      raiz.setAttribute("data-tema", "escuro");
+    } else {
+      raiz.removeAttribute("data-tema");
+    }
+    localStorage.setItem("tema", escuro ? "escuro" : "claro");
+    atualizarRotulo();
+    setTimeout(function () { raiz.classList.remove("tema-transicao"); }, 300);
+  });
+
+  atualizarRotulo();
+}
 
 /* ---------- Filtros: enviar o formulário ao trocar a opção ---------- */
 
@@ -54,18 +86,22 @@ function configurarToasts() {
 function configurarModalExclusao() {
   const modal = document.getElementById("modalConfirmar");
   if (!modal || typeof modal.showModal !== "function") {
-    // Navegador sem suporte a <dialog>: usa a confirmação padrão.
+    // Navegador sem suporte a <dialog>: usa a confirmação padrão e envia o mesmo formulário (POST).
+    const formReserva = modal && modal.querySelector("[data-modal-form]");
     document.addEventListener("click", function (e) {
       const link = e.target.closest("[data-confirmar-exclusao]");
-      if (link && !confirm("Tem certeza que deseja apagar " + link.dataset.confirmarExclusao + "?")) {
-        e.preventDefault();
+      if (!link) return;
+      e.preventDefault();
+      if (formReserva && confirm("Tem certeza que deseja apagar " + link.dataset.confirmarExclusao + "?")) {
+        formReserva.action = link.href;
+        formReserva.submit();
       }
     });
     return;
   }
 
   const nome = modal.querySelector("[data-modal-nome]");
-  const confirmar = modal.querySelector("[data-modal-confirmar]");
+  const formulario = modal.querySelector("[data-modal-form]");
   const cancelar = modal.querySelector("[data-modal-cancelar]");
 
   document.addEventListener("click", function (e) {
@@ -74,7 +110,7 @@ function configurarModalExclusao() {
 
     e.preventDefault();
     nome.textContent = link.dataset.confirmarExclusao || "este registro";
-    confirmar.href = link.href;
+    formulario.action = link.href; // a página de exclusão só aceita POST com token
     modal.showModal();
     cancelar.focus();
   });

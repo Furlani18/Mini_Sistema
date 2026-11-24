@@ -1,6 +1,8 @@
 <?php
 // Consultas e funções dos relatórios, usadas por relatorios.php (tela) e
 // relatorio_exportar.php (arquivos CSV). Em todas, pedidos CANCELADOS não contam como venda.
+// Valores por pedido vêm da visão vw_pedidos (já com o desconto). O ranking de produtos soma
+// os itens vendidos (valor bruto, antes do desconto do pedido).
 
 require_once __DIR__ . '/lista.php';
 
@@ -70,13 +72,13 @@ function limites(array $p): array
 function resumo_vendas(PDO $pdo, array $p): array
 {
     $stmt = $pdo->prepare(
-        "SELECT COUNT(DISTINCT CASE WHEN p.STATUS <> 'CANCELADO' THEN p.ID END)                  AS PEDIDOS,
-                COUNT(DISTINCT CASE WHEN p.STATUS =  'CANCELADO' THEN p.ID END)                  AS CANCELADOS,
-                COUNT(DISTINCT CASE WHEN p.STATUS <> 'CANCELADO' THEN p.CLIENTE_ID END)          AS CLIENTES,
-                COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN i.QUANTIDADE END), 0)        AS ITENS,
-                COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN i.QUANTIDADE * i.PRECO_UNITARIO END), 0) AS FATURAMENTO
-           FROM pedidos p
-           LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
+        "SELECT COUNT(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.ID END)                   AS PEDIDOS,
+                COUNT(CASE WHEN p.STATUS =  'CANCELADO' THEN p.ID END)                   AS CANCELADOS,
+                COUNT(DISTINCT CASE WHEN p.STATUS <> 'CANCELADO' THEN p.CLIENTE_ID END)  AS CLIENTES,
+                COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.UNIDADES END), 0)  AS ITENS,
+                COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.DESCONTO END), 0)  AS DESCONTOS,
+                COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.TOTAL END), 0)     AS FATURAMENTO
+           FROM vw_pedidos p
           WHERE p.CRIADO_EM BETWEEN ? AND ?"
     );
     $stmt->execute(limites($p));
@@ -97,10 +99,9 @@ function vendas_por_periodo(PDO $pdo, array $p): array
 
     $stmt = $pdo->prepare(
         "SELECT DATE_FORMAT(p.CRIADO_EM, '$formatoSql') AS CHAVE,
-                COUNT(DISTINCT p.ID) AS PEDIDOS,
-                COALESCE(SUM(i.QUANTIDADE * i.PRECO_UNITARIO), 0) AS VALOR
-           FROM pedidos p
-           LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
+                COUNT(*) AS PEDIDOS,
+                COALESCE(SUM(p.TOTAL), 0) AS VALOR
+           FROM vw_pedidos p
           WHERE p.STATUS <> 'CANCELADO' AND p.CRIADO_EM BETWEEN ? AND ?
           GROUP BY CHAVE"
     );
@@ -134,10 +135,8 @@ function vendas_por_periodo(PDO $pdo, array $p): array
 function pedidos_por_status(PDO $pdo, array $p): array
 {
     $stmt = $pdo->prepare(
-        'SELECT p.STATUS, COUNT(DISTINCT p.ID) AS PEDIDOS,
-                COALESCE(SUM(i.QUANTIDADE * i.PRECO_UNITARIO), 0) AS VALOR
-           FROM pedidos p
-           LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
+        'SELECT p.STATUS, COUNT(*) AS PEDIDOS, COALESCE(SUM(p.TOTAL), 0) AS VALOR
+           FROM vw_pedidos p
           WHERE p.CRIADO_EM BETWEEN ? AND ?
           GROUP BY p.STATUS'
     );
@@ -183,12 +182,11 @@ function melhores_clientes(PDO $pdo, array $p, ?int $limite = 5): array
 {
     $stmt = $pdo->prepare(
         "SELECT c.ID, c.NOME, c.EMAIL,
-                COUNT(DISTINCT p.ID) AS PEDIDOS,
-                COALESCE(SUM(i.QUANTIDADE * i.PRECO_UNITARIO), 0) AS VALOR,
+                COUNT(*) AS PEDIDOS,
+                COALESCE(SUM(p.TOTAL), 0) AS VALOR,
                 MAX(p.CRIADO_EM) AS ULTIMA
-           FROM pedidos p
+           FROM vw_pedidos p
           INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
-           LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
           WHERE p.STATUS <> 'CANCELADO' AND p.CRIADO_EM BETWEEN ? AND ?
           GROUP BY c.ID, c.NOME, c.EMAIL
           ORDER BY VALOR DESC, PEDIDOS DESC"

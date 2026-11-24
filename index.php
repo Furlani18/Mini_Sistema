@@ -15,18 +15,14 @@ $numeros = $pdo->query(
         (SELECT COUNT(*) FROM produtos WHERE ESTOQUE <= " . ESTOQUE_BAIXO . ") AS estoque_baixo,
         (SELECT COUNT(*) FROM pedidos)                                    AS pedidos,
         (SELECT COUNT(*) FROM pedidos WHERE STATUS = 'ABERTO')            AS pedidos_abertos,
-        (SELECT COALESCE(SUM(i.QUANTIDADE * i.PRECO_UNITARIO), 0)
-           FROM itens_pedido i JOIN pedidos p ON p.ID = i.PEDIDO_ID
-          WHERE p.STATUS <> 'CANCELADO')                                  AS faturamento"
+        (SELECT COALESCE(SUM(TOTAL), 0) FROM vw_pedidos
+          WHERE STATUS <> 'CANCELADO')                                    AS faturamento"
 )->fetch();
 
 $ultimosPedidos = $pdo->query(
-    'SELECT p.ID, p.STATUS, p.CRIADO_EM, c.NOME AS CLIENTE,
-            COALESCE(SUM(i.QUANTIDADE * i.PRECO_UNITARIO), 0) AS TOTAL
-       FROM pedidos p
+    'SELECT p.ID, p.STATUS, p.CRIADO_EM, c.NOME AS CLIENTE, p.TOTAL
+       FROM vw_pedidos p
       INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
-       LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
-      GROUP BY p.ID, p.STATUS, p.CRIADO_EM, c.NOME
       ORDER BY p.ID DESC
       LIMIT 5'
 )->fetchAll();
@@ -34,6 +30,11 @@ $ultimosPedidos = $pdo->query(
 $estoqueBaixo = $pdo->query(
     'SELECT ID, NOME, ESTOQUE FROM produtos WHERE ESTOQUE <= ' . ESTOQUE_BAIXO . ' ORDER BY ESTOQUE, NOME LIMIT 5'
 )->fetchAll();
+
+// Aviso de segurança: o usuário logado ainda usa a senha padrão de instalação?
+$stmt = $pdo->prepare('SELECT SENHA FROM usuarios WHERE ID = ?');
+$stmt->execute([$_SESSION['usuario_id']]);
+$usaSenhaPadrao = password_verify('admin123', (string)$stmt->fetchColumn());
 
 $plural = fn(int $n, string $um, string $varios) => $n . ' ' . ($n === 1 ? $um : $varios);
 $primeiroNome = explode(' ', trim($_SESSION['usuario_nome'] ?? ''))[0];
@@ -95,6 +96,14 @@ $modulos = [
             <a href="pedido_novo.php" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Pedido</a>
           </div>
         </div>
+
+        <?php if ($usaSenhaPadrao): ?>
+          <div class="alert alert-warning" role="alert">
+            <?php echo icone('cadeado'); ?>
+            <span>Você ainda está usando a <strong>senha padrão de instalação</strong>, que qualquer pessoa pode adivinhar.
+              <a href="perfil.php" class="text-link">Trocar minha senha agora</a></span>
+          </div>
+        <?php endif; ?>
 
         <h3 class="secao-titulo">Visão geral</h3>
 

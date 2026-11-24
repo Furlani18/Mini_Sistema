@@ -39,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $acao === 'dados') {
             $stmt->execute([$valores['nome'], $valores['email'], $valores['telefone'] ?: null, $meuId]);
             $_SESSION['usuario_nome'] = $valores['nome'];
             $_SESSION['usuario_email'] = $valores['email'];
+            registrar_atividade($pdo, 'ALTEROU', 'Atualizou os próprios dados', 'usuario', $meuId);
             $toasts[] = ['tipo' => 'success', 'mensagem' => 'Seus dados foram atualizados!'];
         } catch (PDOException $e) {
             if ($e->getCode() !== '23000') {
@@ -66,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $acao === 'senha') {
         $stmt = $pdo->prepare('UPDATE usuarios SET SENHA = ? WHERE ID = ?');
         $stmt->execute([password_hash($nova, PASSWORD_DEFAULT), $meuId]);
         session_regenerate_id(true);
+        registrar_atividade($pdo, 'SENHA', 'Trocou a própria senha', 'usuario', $meuId);
         $toasts[] = ['tipo' => 'success', 'mensagem' => 'Senha alterada com sucesso!'];
     }
 }
@@ -141,6 +143,7 @@ $camposSenha = [
                         <div class="alert alert-error" role="alert"><?php echo icone('erro'); ?><span>Corrija os campos destacados.</span></div>
                     <?php endif; ?>
                     <form method="POST" action="" data-validar data-entidade="usuário" novalidate>
+                        <?php echo csrf_campo(); ?>
                         <input type="hidden" name="acao" value="dados">
                         <?php $campos = $camposDados; $erros = $errosDados; include __DIR__ . '/form_campos.php'; ?>
                         <div class="form-actions">
@@ -155,6 +158,7 @@ $camposSenha = [
                         <div class="alert alert-error" role="alert"><?php echo icone('erro'); ?><span>Não foi possível alterar a senha.</span></div>
                     <?php endif; ?>
                     <form method="POST" action="" data-validar data-entidade="usuário" novalidate>
+                        <?php echo csrf_campo(); ?>
                         <input type="hidden" name="acao" value="senha">
                         <?php $campos = $camposSenha; $erros = $errosSenha; include __DIR__ . '/form_campos.php'; ?>
                         <div class="form-actions">

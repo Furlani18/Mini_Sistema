@@ -1,7 +1,8 @@
 # 📘 Documentação Técnica — Mini Sistema de Gerenciamento de Clientes
 
 > Documentação completa do projeto: arquitetura, banco de dados, fluxo de cada página,
-> front-end, segurança, problemas conhecidos e um guia de consultas SQL (do básico ao avançado).
+> front-end, segurança, níveis de acesso, problemas conhecidos e um guia de consultas SQL
+> (do básico ao avançado).
 
 ---
 
@@ -23,30 +24,50 @@
 
 ## 1. Visão geral
 
-O **Mini Sistema** é uma aplicação web CRUD (Create, Read, Update, Delete) para cadastro de
-clientes, escrita em PHP puro (sem framework), com banco MySQL/MariaDB acessado via **PDO**.
-Todo o sistema fica protegido por uma tela de **login** baseada em sessão PHP.
+O **Mini Sistema** é uma aplicação web de gestão de clientes, produtos e pedidos, escrita em PHP
+puro (sem framework), com banco MySQL/MariaDB acessado via **PDO**. Todo o sistema fica protegido
+por uma tela de **login** baseada em sessão PHP, com dois níveis de acesso (**Administrador** e
+**Operador**).
 
 | Funcionalidade | Página          | Operação SQL principal |
 |----------------|-----------------|------------------------|
-| Login          | `login.php`     | `SELECT`               |
-| Logout         | `logout.php`    | —                      |
+| Login / Logout | `login.php`, `logout.php` | `SELECT` + limite de tentativas (`tentativas_login`) |
 | Painel (início) | `index.php`    | `SELECT` com subconsultas (totais, últimos pedidos, estoque baixo) |
-| Cadastrar      | `cadastro.php`  | `INSERT`               |
-| Listar/Buscar  | `clientes.php`  | `SELECT` + `LEFT JOIN pedidos` (qtd. de pedidos) |
-| Atualizar      | `atualizar.php` | `SELECT` + `UPDATE`    |
-| Apagar         | `apagar.php`    | `SELECT` + `DELETE` (recusado se o cliente tiver pedidos) |
-| Cadastrar/editar produto | `produto_cadastro.php` | `INSERT` / `SELECT` + `UPDATE` |
-| Listar/Buscar produtos | `produtos.php` | `SELECT` + `LEFT JOIN` |
-| Apagar produto | `produto_apagar.php` | `SELECT` + `DELETE` |
-| Listar pedidos | `pedidos.php`   | `SELECT` com `JOIN` em 4 tabelas + `GROUP BY` |
-| Novo pedido    | `pedido_novo.php` | `INSERT` em `pedidos` e `itens_pedido` (transação) |
-| Ver pedido / mudar status | `pedido_ver.php` | `SELECT` com `JOIN` + `UPDATE` |
+| Relatórios     | `relatorios.php`, `relatorio_exportar.php` | Agrupamentos por mês/dia, status, produto e cliente; exportação CSV |
+| Clientes: listar/buscar | `clientes.php` | `SELECT` + `LEFT JOIN vw_pedidos`, busca, ordenação e paginação |
+| Clientes: cadastrar/editar | `cadastro.php`, `atualizar.php` | `INSERT` / `UPDATE` (documento, endereço e observações) |
+| Clientes: ficha | `cliente_ver.php` | Indicadores, histórico de pedidos e produtos mais comprados |
+| Clientes: importar | `cliente_importar.php` | `INSERT` em lote a partir de uma planilha CSV |
+| Clientes: apagar | `apagar.php` | `DELETE` (recusado se o cliente tiver pedidos) |
+| Produtos       | `produtos.php`, `produto_cadastro.php`, `produto_apagar.php` | `SELECT` / `INSERT` / `UPDATE` / `DELETE` |
+| Estoque        | `produto_estoque.php` | Entradas, saídas e ajustes com histórico (`movimentos_estoque`) |
+| Pedidos        | `pedidos.php`   | `SELECT` em `vw_pedidos` com filtros e paginação |
+| Novo/editar pedido | `pedido_novo.php` | `INSERT`/`UPDATE` em `pedidos` e `itens_pedido` (transação) |
+| Ver pedido / status | `pedido_ver.php` | `SELECT` com `JOIN` + `UPDATE` |
+| Imprimir pedido | `pedido_imprimir.php` | Comprovante para imprimir ou salvar em PDF |
 | Apagar pedido  | `pedido_apagar.php` | `DELETE` (itens apagados por `CASCADE`) |
-| Relacionamentos | `relacionamentos.php` | Diagrama + `SELECT` com `JOIN` nas 5 tabelas |
+| Usuários       | `usuarios.php`, `usuario_cadastro.php`, `usuario_apagar.php` | Somente administradores |
+| Meu perfil     | `perfil.php`    | `UPDATE` dos próprios dados e da senha |
+| Atividades     | `atividades.php` | Registro de quem fez o quê (somente administradores) |
+| Relacionamentos | `relacionamentos.php` | Diagrama + `SELECT` com `JOIN` nas 5 tabelas principais |
 
-O banco tem **5 tabelas relacionadas**: `usuarios`, `clientes`, `produtos`, `pedidos` e
-`itens_pedido` (detalhes e diagrama na [seção 6](#6-banco-de-dados)).
+O banco tem **5 tabelas principais relacionadas** (`usuarios`, `clientes`, `produtos`, `pedidos` e
+`itens_pedido`), mais **3 tabelas de apoio** (`movimentos_estoque`, `atividades` e
+`tentativas_login`) e a visão `vw_pedidos` (detalhes na [seção 6](#6-banco-de-dados)).
+
+### 1.1 Níveis de acesso
+
+| Ação | Administrador | Operador |
+|------|:---:|:---:|
+| Ver painel, relatórios, listas e fichas | ✅ | ✅ |
+| Cadastrar e editar clientes, produtos e pedidos | ✅ | ✅ |
+| Importar clientes, movimentar estoque | ✅ | ✅ |
+| Apagar clientes, produtos e pedidos | ✅ | ❌ |
+| Gerenciar usuários | ✅ | ❌ |
+| Ver o registro de atividades | ✅ | ❌ |
+
+O sistema nunca fica sem administrador: o último não pode ser apagado nem rebaixado, e ninguém
+apaga o próprio usuário.
 
 ---
 
@@ -55,10 +76,11 @@ O banco tem **5 tabelas relacionadas**: `usuarios`, `clientes`, `produtos`, `ped
 | Camada         | Tecnologia                                         |
 |----------------|----------------------------------------------------|
 | Servidor       | Apache (XAMPP) ou servidor embutido do PHP         |
-| Back-end       | PHP 7.4+ (`declare(strict_types=1)` em parte dos arquivos) |
-| Banco de dados | MariaDB/MySQL (o XAMPP traz MariaDB)               |
+| Back-end       | PHP 8.0+ (`match`, *spread* em arrays, `declare(strict_types=1)` em parte dos arquivos) |
+| Banco de dados | MariaDB 10.2+ / MySQL (o XAMPP traz MariaDB)       |
 | Acesso a dados | PDO com *prepared statements*                      |
-| Front-end      | HTML5, CSS3 (variáveis CSS, layout responsivo), JavaScript puro |
+| Front-end      | HTML5, CSS3 (variáveis CSS, layout responsivo, modo escuro), JavaScript puro |
+| Serviço externo | [ViaCEP](https://viacep.com.br) (opcional, para preencher o endereço pelo CEP) |
 
 ---
 
@@ -80,11 +102,14 @@ CREATE DATABASE IF NOT EXISTS mini_sistema
 USE mini_sistema;
 ```
 
-Depois, execute os três scripts do projeto, **nesta ordem** (as tabelas novas dependem das antigas):
+Depois, execute os quatro scripts do projeto, **nesta ordem** (cada um depende dos anteriores):
 - [usuarios.sql](usuarios.sql) — cria a tabela `usuarios` (login) e o usuário administrador;
-- [clientes.sql](clientes.sql) — cria a tabela `clientes` (dados do CRUD);
+- [clientes.sql](clientes.sql) — cria a tabela `clientes`;
 - [relacionamentos.sql](relacionamentos.sql) — cria `produtos`, `pedidos` e `itens_pedido` com as
-  chaves estrangeiras, e insere dados de exemplo (5 produtos, 2 clientes e 2 pedidos).
+  chaves estrangeiras, e insere dados de exemplo (5 produtos, 2 clientes e 2 pedidos);
+- [melhorias.sql](melhorias.sql) — níveis de acesso, documento/endereço dos clientes, desconto e
+  forma de pagamento nos pedidos, a visão `vw_pedidos` e as tabelas `movimentos_estoque`,
+  `atividades` e `tentativas_login`.
 
 Pelo terminal:
 
@@ -92,9 +117,11 @@ Pelo terminal:
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < usuarios.sql
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < clientes.sql
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < relacionamentos.sql
+C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < melhorias.sql
 ```
 
-Os três scripts podem ser executados mais de uma vez sem duplicar tabelas nem dados.
+Todos os scripts podem ser executados mais de uma vez sem duplicar tabelas nem dados. Em um banco
+que já estava em uso, basta rodar o `melhorias.sql`: ele só **acrescenta** colunas e tabelas.
 
 > O `relacionamentos.sql` começa com `SET NAMES utf8mb4`: sem isso, o cliente `mysql` do Windows
 > importaria os acentos com outro charset e gravaria "mecÃ¢nico" no lugar de "mecânico".
@@ -108,7 +135,8 @@ Os três scripts podem ser executados mais de uma vez sem duplicar tabelas nem d
 php -S localhost:8000
 ```
 
-**Login padrão:** `admin@sistema.com` / `admin123`
+**Login inicial:** `admin@sistema.com` / `admin123`. A senha não aparece mais na tela de login; enquanto
+ela não for trocada, o painel mostra um aviso com o atalho para **Meu perfil → Alterar senha**.
 
 ### 3.4 Configuração da conexão
 
@@ -128,40 +156,57 @@ Os dados de conexão ficam em [conexao.php](conexao.php):
 ```
 mini_sistema/
 ├── conexao.php      # Cria o objeto $pdo (conexão com o banco)
-├── sessao.php       # Define o fuso horário (America/Sao_Paulo) e inicia a sessão
-├── auth.php         # "Guarda" das páginas: exige usuário logado
+├── sessao.php       # Fuso horário, cookie de sessão seguro e session_start()
+├── auth.php         # "Guarda" das páginas: exige login, recarrega o perfil e confere o token CSRF
+├── seguranca.php    # CSRF, níveis de acesso, limite de tentativas de login e registro de atividades
 ├── login.php        # Formulário e processamento do login
-├── logout.php       # Destrói a sessão e volta ao login
+├── logout.php       # Sai do sistema (somente por POST com token)
 ├── index.php        # Painel inicial: totais, últimos pedidos e estoque baixo
-├── cadastro.php     # Formulário de cadastro de cliente (INSERT)
-├── clientes.php     # Listagem + busca de clientes (SELECT)
+├── relatorios.php   # Relatórios de vendas com gráfico, filtros de período e comparação
+├── relatorios_funcoes.php # Período e consultas dos relatórios
+├── relatorio_exportar.php # Exporta pedidos/produtos/clientes do período em CSV
+├── cadastro.php     # Cadastro de cliente (INSERT)
+├── clientes.php     # Lista de clientes com busca, ordenação e paginação
+├── cliente_ver.php  # Ficha do cliente: dados, indicadores, histórico e produtos favoritos
+├── cliente_importar.php # Importação de clientes de planilha CSV
 ├── atualizar.php    # Edição de cliente (SELECT + UPDATE)
 ├── apagar.php       # Exclusão de cliente (bloqueada se ele tiver pedidos)
-├── produto_cadastro.php # Cadastro e edição de produto (INSERT / UPDATE)
-├── produtos.php     # Listagem + busca de produtos
+├── produto_cadastro.php # Cadastro (com estoque inicial) e edição de produto
+├── produtos.php     # Lista de produtos com busca, filtro de estoque e paginação
+├── produto_estoque.php # Entradas, saídas, ajustes e histórico de estoque de um produto
 ├── produto_apagar.php # Exclusão de produto (bloqueada se ele já foi vendido)
-├── pedidos.php      # Listagem de pedidos (JOIN clientes/usuarios/itens_pedido)
-├── pedido_novo.php  # Registro de pedido com itens (transação)
+├── pedidos.php      # Lista de pedidos com filtros (status, período, cliente) e paginação
+├── pedido_novo.php  # Registro e edição de pedido (itens, desconto, pagamento)
 ├── pedido_ver.php   # Detalhes do pedido e mudança de status
+├── pedido_imprimir.php # Comprovante do pedido para imprimir / salvar em PDF
 ├── pedido_apagar.php # Exclusão de pedido (itens apagados em cascata)
+├── usuarios.php     # Lista de usuários (somente administradores)
+├── usuario_cadastro.php # Cadastro/edição de usuário, com perfil de acesso
+├── usuario_apagar.php # Exclusão de usuário (pedidos registrados são mantidos)
+├── perfil.php       # Meu perfil: dados pessoais e troca de senha
+├── atividades.php   # Registro de atividades (somente administradores)
 ├── relacionamentos.php # Diagrama e explicação das 5 tabelas + consulta ao vivo
-├── estoque.php      # devolver_estoque() e baixar_estoque()
-├── header.php       # Menu lateral (agrupado), usuário logado e breadcrumb
-├── footer.php       # Rodapé, toasts e modal de exclusão compartilhados
-├── form_cliente.php # Campos do formulário de cliente (cadastro e atualização)
-├── validacao.php    # validar_cliente(): regras de validação no servidor
-├── ui.php           # icone(), iniciais(), flash() e flash_pegar()
+├── estoque.php      # movimentar_estoque() e as regras de estoque dos pedidos
+├── lista.php        # Ordenação, paginação e filtros compartilhados pelas listas
+├── header.php       # Menu lateral (agrupado por perfil), tema, usuário logado e breadcrumb
+├── footer.php       # Rodapé, toasts e modal de exclusão (POST com token)
+├── form_campos.php  # Renderiza campos de formulário (input, select, textarea)
+├── form_cliente.php # Campos do cliente em 3 seções (dados, endereço, observações)
+├── validacao.php    # Regras de validação: cliente (CPF/CNPJ, CEP, UF), usuário e senha
+├── ui.php           # Ícones, formatação (moeda, CPF/CNPJ, CEP, endereço), status e flash()
 ├── usuarios.sql     # Script da tabela `usuarios` + usuário admin
 ├── clientes.sql     # Script da tabela `clientes`
 ├── relacionamentos.sql # Script de `produtos`, `pedidos` e `itens_pedido` + dados de exemplo
+├── melhorias.sql    # Colunas e tabelas novas (perfis, endereço, desconto, estoque, atividades)
 ├── css/
-│   └── style.css    # Estilo de todas as páginas
+│   └── style.css    # Estilo de todas as páginas, inclusive modo escuro e impressão
 ├── js/
-│   ├── app.js        # Toasts e modal de confirmação de exclusão
-│   ├── formulario.js # Validação/máscara dos formulários de cliente
-│   ├── busca.js     # Busca instantânea nas listas (clientes, produtos e pedidos)
-│   ├── pedido.js    # Linhas de itens e total do formulário de pedido
-│   └── moeda.js     # Máscara de reais do campo de preço (aceita milhares e milhões)
+│   ├── app.js        # Toasts, modal de exclusão, filtros automáticos e modo escuro
+│   ├── formulario.js # Validação e máscaras dos formulários de cliente e usuário
+│   ├── endereco.js   # Máscaras de CPF/CNPJ e CEP + busca do endereço pelo CEP
+│   ├── relatorios.js # Dicas (tooltip) do gráfico de faturamento
+│   ├── pedido.js     # Itens, subtotal, desconto e total do formulário de pedido
+│   └── moeda.js      # Máscara de reais (preço e desconto)
 ├── imagens/
 │   └── bem-vindo.jpeg
 ├── README.md        # Resumo do projeto
@@ -180,11 +225,15 @@ O projeto segue o modelo **"uma página PHP = uma tela"**: cada arquivo processa
 ```
 página protegida (ex.: clientes.php)
    ├── require auth.php
-   │      └── require sessao.php  → date_default_timezone_set('America/Sao_Paulo') + session_start()
-   │      └── sem $_SESSION['usuario_id']? → redireciona p/ login.php?redirect=clientes.php
-   ├── require conexao.php        → $pdo pronto para uso
-   ├── include header.php         → menu lateral + breadcrumb
-   └── include footer.php         → rodapé, toasts, modal de exclusão e js/app.js
+   │      ├── require sessao.php     → fuso horário + cookie httponly/samesite + session_start()
+   │      ├── require conexao.php    → $pdo pronto para uso
+   │      ├── require seguranca.php  → csrf_*, eh_admin(), registrar_atividade()...
+   │      ├── sem $_SESSION['usuario_id']?  → login.php?redirect=clientes.php
+   │      ├── recarrega NOME/EMAIL/PERFIL do banco (usuário apagado → desconectado)
+   │      └── POST sem token CSRF válido?   → recusa e volta para a página
+   ├── (opcional) exigir_admin()       → páginas exclusivas de administrador
+   ├── include header.php              → menu lateral + breadcrumb + tema salvo
+   └── include footer.php              → rodapé, toasts, modal de exclusão e js/app.js
 ```
 
 > As variáveis internas do `header.php` usam o prefixo `menu` (`$menuLinks`, `$menuHref`...)
@@ -199,13 +248,16 @@ Usuário acessa clientes.php sem estar logado
 auth.php → Location: login.php?redirect=clientes.php
         │
         ▼
-login.php (POST email + senha)
-   ├── SELECT ID, NOME, EMAIL, SENHA FROM usuarios WHERE EMAIL = ?
+login.php (POST email + senha + token CSRF)
+   ├── token inválido?                    → "A página de login expirou"
+   ├── 5 erros em 15 min (email) ou 20 (IP)? → bloqueio temporário, nem confere a senha
+   ├── SELECT ID, NOME, EMAIL, SENHA, PERFIL FROM usuarios WHERE EMAIL = ?
    ├── password_verify(senha, hash)
-   │     ├── OK   → session_regenerate_id(true)
-   │     │          grava usuario_id / usuario_nome / usuario_email na sessão
+   │     ├── OK   → session_regenerate_id(true), novo token CSRF
+   │     │          grava usuario_id / nome / email / perfil na sessão
+   │     │          limpa as tentativas erradas, registra "Entrou no sistema"
    │     │          Location: clientes.php   (valor de redirect)
-   │     └── Falha → "Email ou senha inválidos!"
+   │     └── Falha → grava a tentativa; avisa quando restam 2 ou menos
 ```
 
 O parâmetro `redirect` é validado com a regex `^[a-zA-Z0-9_\-]+\.php$`, impedindo
@@ -214,35 +266,49 @@ redirecionamento para sites externos (*open redirect*).
 ### 5.3 Fluxo do CRUD
 
 ```
-cadastro.php  ──POST──► validar_cliente() ──► INSERT ──► toast de sucesso
-clientes.php  ──GET───► SELECT ... ORDER BY ID DESC ──► tabela + busca JS
+cadastro.php  ──POST──► validar_cliente_completo() ──► INSERT ──► ficha do cliente (toast)
+clientes.php  ──GET───► busca (?q=), ordenação (?ordem=&dir=) e paginação (?pagina=&por=)
+   ├── 👁 Ficha   → cliente_ver.php?id=N
    ├── ✏️ Editar  → atualizar.php?id=N ──GET──► SELECT por ID
    │                                   ──POST─► UPDATE por ID
-   └── Apagar → modal de confirmação → apagar.php?id=N ──► SELECT c.NOME, COUNT(p.ID) (LEFT JOIN pedidos)
-                                                    ├► tem pedidos? → flash(erro), nada é apagado
-                                                    └► senão DELETE → flash(sucesso)
-                                                       → redireciona → clientes.php (toast)
+   └── Apagar (só admin) → modal → POST apagar.php?id=N (com token)
+                                     ├► tem pedidos? → flash(erro), nada é apagado
+                                     └► senão DELETE → registra atividade → clientes.php (toast)
 ```
+
+Todas as exclusões (`apagar.php`, `produto_apagar.php`, `pedido_apagar.php`, `usuario_apagar.php`)
+chamam `exigir_post()` e `exigir_admin()`: um link GET (vindo de outro site, por exemplo) é
+recusado.
 
 ### 5.3.1 Fluxo do pedido
 
 ```
-pedido_novo.php ──POST──► valida cliente, status e itens
+pedido_novo.php ──POST──► valida cliente, status, pagamento, desconto e itens
    └── beginTransaction()
-         ├── INSERT INTO pedidos (CLIENTE_ID, USUARIO_ID = usuário logado, ...)
+         ├── INSERT INTO pedidos (..., DESCONTO, FORMA_PAGAMENTO, USUARIO_ID = usuário logado)
          ├── INSERT INTO itens_pedido ... SELECT preço atual FROM produtos   (1 por produto)
-         ├── baixar_estoque()  → SELECT ... FOR UPDATE + UPDATE produtos
+         ├── baixar_estoque() → movimentar_estoque() por item (FOR UPDATE + histórico)
          ├── faltou estoque? → rollBack() (nada é gravado) + mensagem de erro
-         └── tudo certo      → commit() → pedido_ver.php?id=N (toast)
+         └── tudo certo      → commit() → registra atividade → pedido_ver.php?id=N
+
+pedido_novo.php?id=N (só pedidos ABERTOS)
+   └── beginTransaction()
+         ├── SELECT STATUS ... FOR UPDATE (confere que ainda está aberto)
+         ├── UPDATE pedidos; DELETE + INSERT dos itens
+         │     (produto que já estava no pedido mantém o preço original)
+         └── ajustar_estoque_pedido() → movimenta só a diferença de cada produto
 ```
 
 ### 5.4 Variáveis de sessão
 
-| Chave                       | Conteúdo                         |
-|-----------------------------|----------------------------------|
-| `$_SESSION['usuario_id']`   | ID do usuário logado             |
-| `$_SESSION['usuario_nome']` | Nome exibido no menu lateral e na saudação do painel |
-| `$_SESSION['usuario_email']`| Email do usuário logado          |
+| Chave                         | Conteúdo                         |
+|-------------------------------|----------------------------------|
+| `$_SESSION['usuario_id']`     | ID do usuário logado             |
+| `$_SESSION['usuario_nome']`   | Nome exibido no menu lateral e na saudação do painel |
+| `$_SESSION['usuario_email']`  | Email do usuário logado          |
+| `$_SESSION['usuario_perfil']` | `ADMIN` ou `OPERADOR` (recarregado do banco a cada página) |
+| `$_SESSION['csrf']`           | Token secreto enviado em todo formulário `POST` |
+| `$_SESSION['flash']`          | Mensagens que aparecem como toast na próxima página |
 
 ---
 
@@ -252,7 +318,8 @@ Banco: **`mini_sistema`** (charset `utf8mb4`).
 
 ### 6.1 Tabela `usuarios`
 
-Usada para **autenticação**. Criada por [usuarios.sql](usuarios.sql).
+Usada para **autenticação**. Criada por [usuarios.sql](usuarios.sql); a coluna `PERFIL` vem do
+[melhorias.sql](melhorias.sql).
 
 | Coluna      | Tipo           | Restrições                          | Descrição               |
 |-------------|----------------|-------------------------------------|-------------------------|
@@ -261,24 +328,27 @@ Usada para **autenticação**. Criada por [usuarios.sql](usuarios.sql).
 | `EMAIL`     | `VARCHAR(100)` | `NOT NULL`, `UNIQUE`                | Login                   |
 | `TELEFONE`  | `VARCHAR(20)`  | `NULL`                              | Telefone (opcional)     |
 | `SENHA`     | `VARCHAR(255)` | `NOT NULL`                          | Hash bcrypt da senha    |
+| `PERFIL`    | `ENUM('ADMIN','OPERADOR')` | `NOT NULL`, padrão `OPERADOR` | Nível de acesso |
 | `CRIADO_EM` | `TIMESTAMP`    | `DEFAULT CURRENT_TIMESTAMP`         | Data de criação         |
 
 ### 6.2 Tabela `clientes`
 
-Tabela dos **clientes** gerenciados pelo CRUD (cadastro, listagem, atualização e exclusão).
-Criada por [clientes.sql](clientes.sql). A coluna `CRIADO_EM` é preenchida automaticamente e é
-usada em várias consultas da seção 11:
+Tabela dos **clientes**. Criada por [clientes.sql](clientes.sql); documento, endereço e observações
+vêm do [melhorias.sql](melhorias.sql). A coluna `CRIADO_EM` é preenchida automaticamente e é
+usada em várias consultas da seção 11.
 
-```sql
-CREATE TABLE IF NOT EXISTS clientes (
-    ID        INT(11)      NOT NULL AUTO_INCREMENT,
-    NOME      VARCHAR(100) NOT NULL,
-    EMAIL     VARCHAR(100) NOT NULL,
-    TELEFONE  VARCHAR(20)  NULL,
-    CRIADO_EM TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (ID)
-);
-```
+| Coluna        | Tipo           | Restrições            | Descrição |
+|---------------|----------------|-----------------------|-----------|
+| `ID`          | `INT(11)`      | PK, `AUTO_INCREMENT`  | Identificador |
+| `NOME`        | `VARCHAR(100)` | `NOT NULL`            | Nome ou razão social |
+| `EMAIL`       | `VARCHAR(100)` | `NOT NULL`            | Email |
+| `TELEFONE`    | `VARCHAR(20)`  | `NULL`                | Telefone formatado |
+| `CPF_CNPJ`    | `VARCHAR(14)`  | `NULL`, `UNIQUE`      | Só os dígitos (11 = CPF, 14 = CNPJ), com dígitos verificadores conferidos |
+| `CEP`         | `VARCHAR(8)`   | `NULL`                | Só os dígitos |
+| `LOGRADOURO`, `NUMERO`, `COMPLEMENTO`, `BAIRRO`, `CIDADE` | `VARCHAR` | `NULL` | Endereço |
+| `UF`          | `CHAR(2)`      | `NULL`                | Sigla do estado |
+| `OBSERVACOES` | `TEXT`         | `NULL`                | Anotações livres (até 2000 caracteres na tela) |
+| `CRIADO_EM`   | `TIMESTAMP`    | `DEFAULT CURRENT_TIMESTAMP` | Data do cadastro |
 
 ### 6.3 Tabela `produtos`
 
@@ -304,6 +374,8 @@ Cada pedido pertence a **um cliente** e foi registrado por **um usuário** do si
 | `USUARIO_ID` | `INT(11)`      | `NULL`, **FK → `usuarios.ID`**               | Quem registrou (usuário logado)   |
 | `STATUS`     | `ENUM`         | `'ABERTO'`, `'PAGO'`, `'ENVIADO'`, `'CANCELADO'` (padrão `ABERTO`) | Situação |
 | `OBSERVACAO` | `VARCHAR(255)` | `NULL`                                       | Observação livre                  |
+| `DESCONTO`   | `DECIMAL(10,2)`| `NOT NULL`, padrão `0`                       | Desconto em reais (não passa do valor dos itens) |
+| `FORMA_PAGAMENTO` | `ENUM`    | `'PIX'`, `'DINHEIRO'`, `'CREDITO'`, `'DEBITO'`, `'BOLETO'` ou `NULL` | Como o cliente pagou |
 | `CRIADO_EM`  | `TIMESTAMP`    | `DEFAULT CURRENT_TIMESTAMP`                  | Data do pedido                    |
 
 ### 6.5 Tabela `itens_pedido`
@@ -437,20 +509,81 @@ erDiagram
 
 ### 6.8 Regras de estoque
 
-Implementadas em [estoque.php](estoque.php), sempre dentro de uma transação:
+Toda alteração de estoque passa por `movimentar_estoque()` em [estoque.php](estoque.php), sempre
+dentro de uma transação. A função trava a linha do produto (`SELECT ... FOR UPDATE`), recusa
+deixar o estoque negativo, atualiza `produtos.ESTOQUE` e grava uma linha em `movimentos_estoque`.
 
-| Ação                                   | Efeito no estoque               |
-|----------------------------------------|---------------------------------|
-| Registrar pedido                       | Baixa (falha se não houver estoque suficiente) |
-| Mudar status para **Cancelado**        | Devolve                         |
-| Tirar um pedido de **Cancelado**       | Baixa de novo (se houver estoque) |
-| Apagar pedido (não cancelado)          | Devolve                         |
+| Ação                                   | Efeito no estoque               | Tipo no histórico |
+|----------------------------------------|---------------------------------|-------------------|
+| Cadastrar produto                      | Soma o estoque inicial          | `CADASTRO` |
+| Registrar pedido                       | Baixa (falha se não houver estoque suficiente) | `VENDA` |
+| Editar itens de um pedido aberto       | Movimenta só a diferença de cada produto | `VENDA` / `DEVOLUCAO` |
+| Mudar status para **Cancelado**        | Devolve                         | `DEVOLUCAO` |
+| Tirar um pedido de **Cancelado**       | Baixa de novo (se houver estoque) | `VENDA` |
+| Apagar pedido (não cancelado)          | Devolve                         | `DEVOLUCAO` |
+| Entrada / saída manual (`produto_estoque.php`) | Soma / subtrai, com motivo obrigatório | `ENTRADA` / `SAIDA` |
+| Ajuste por contagem (`produto_estoque.php`) | Define o valor exato contado | `AJUSTE` |
+
+Na edição do produto o estoque não é mais digitado: ele só muda por essas movimentações, para que
+o histórico sempre explique o saldo.
+
+### 6.9 Visão `vw_pedidos`
+
+Criada pelo [melhorias.sql](melhorias.sql). Junta cada pedido com a soma dos seus itens e é a
+fonte de **todos os totais** do sistema (painel, listas, ficha do cliente, relatórios e CSV):
+
+| Coluna      | Significado |
+|-------------|-------------|
+| `ITENS`     | Quantidade de linhas de item |
+| `UNIDADES`  | Soma das quantidades |
+| `SUBTOTAL`  | Soma de `QUANTIDADE × PRECO_UNITARIO` |
+| `TOTAL`     | `SUBTOTAL − DESCONTO` (nunca negativo) |
+
+```sql
+SELECT ID, STATUS, SUBTOTAL, DESCONTO, TOTAL FROM vw_pedidos WHERE STATUS <> 'CANCELADO';
+```
+
+> Os rankings **por produto** (produtos mais vendidos, produtos favoritos do cliente) continuam
+> somando os itens, ou seja, o valor **antes** do desconto do pedido.
+
+### 6.10 Tabela `movimentos_estoque`
+
+Histórico de toda entrada e saída. `QUANTIDADE` é positiva em entradas e negativa em saídas, e
+`ESTOQUE_APOS` guarda o saldo logo depois do movimento.
+
+| Coluna | Tipo | Descrição |
+|--------|------|-----------|
+| `PRODUTO_ID` | FK → `produtos.ID` (`CASCADE`) | Produto movimentado |
+| `PEDIDO_ID`  | FK → `pedidos.ID` (`SET NULL`) | Pedido que causou o movimento (se houver) |
+| `USUARIO_ID` | FK → `usuarios.ID` (`SET NULL`) | Quem fez |
+| `TIPO`       | `ENUM` | `CADASTRO`, `ENTRADA`, `SAIDA`, `VENDA`, `DEVOLUCAO`, `AJUSTE` |
+| `QUANTIDADE`, `ESTOQUE_APOS` | `INT` | Variação e saldo |
+| `MOTIVO`     | `VARCHAR(255)` | Ex.: "Pedido #15 cancelado", "Nota fiscal 1234" |
+
+Ao rodar o `melhorias.sql`, cada produto existente ganha um registro "Saldo inicial" com o estoque
+daquele momento.
+
+### 6.11 Tabela `atividades`
+
+Registro de auditoria gravado por `registrar_atividade()` ([seguranca.php](seguranca.php)) em toda
+criação, alteração, exclusão, importação, movimentação de estoque, troca de senha, login e logout.
+Guarda `USUARIO_ID` (FK, `SET NULL`) **e** `USUARIO_NOME`, para continuar legível se o usuário for
+apagado, além de `ACAO`, `ENTIDADE` + `ENTIDADE_ID` (ex.: `cliente`, 7), `DESCRICAO`, `IP` e
+`CRIADO_EM`. Não há tela para editar ou apagar registros.
+
+### 6.12 Tabela `tentativas_login`
+
+Uma linha por senha errada (`EMAIL`, `IP`, `CRIADO_EM`). Serve para bloquear temporariamente quem
+erra 5 vezes o mesmo email ou 20 vezes do mesmo computador em 15 minutos. As linhas são apagadas
+no login bem-sucedido e as com mais de um dia são limpas automaticamente.
 
 ---
 
 ## 7. Descrição de cada arquivo
 
-### [conexao.php](conexao.php)
+### Núcleo
+
+#### [conexao.php](conexao.php)
 Cria a instância `$pdo` com três opções importantes:
 - `ERRMODE_EXCEPTION` — erros SQL viram exceções (nada falha em silêncio);
 - `FETCH_ASSOC` — resultados vêm como arrays associativos (`$linha['NOME']`);
@@ -458,186 +591,229 @@ Cria a instância `$pdo` com três opções importantes:
 
 Se a conexão falhar, responde HTTP 500 com uma mensagem amigável.
 
-### [sessao.php](sessao.php)
-Define o fuso horário `America/Sao_Paulo` (o PHP do XAMPP vem configurado como `Europe/Berlin`,
-o que faria a data do painel virar o dia por volta das 19h) e chama `session_start()` somente se
-a sessão ainda não foi iniciada, evitando *warnings* quando incluído mais de uma vez.
+#### [sessao.php](sessao.php)
+Define o fuso horário `America/Sao_Paulo` (o PHP do XAMPP vem configurado como `Europe/Berlin`) e
+inicia a sessão com o cookie `httponly` (JavaScript não lê), `samesite=Lax` (não é enviado em
+formulários de outros sites) e `secure` quando o site estiver em HTTPS.
 
-### [auth.php](auth.php)
-Incluído no topo de toda página protegida. Se não existir `$_SESSION['usuario_id']`, redireciona
-para `login.php?redirect=<página atual>` e encerra o script com `exit`.
+#### [auth.php](auth.php)
+Incluído no topo de toda página protegida. Sem login, redireciona para
+`login.php?redirect=<página>`. Com login, recarrega nome, email e perfil do banco (mudanças feitas
+por um administrador valem na hora; usuário apagado é desconectado) e recusa qualquer `POST` sem o
+token CSRF correto.
 
-### [login.php](login.php)
-- Se o usuário já estiver logado, vai direto para `index.php`.
-- No `POST`, busca o usuário pelo email e confere a senha com `password_verify()`.
-- Em caso de sucesso, regenera o ID da sessão e grava os dados do usuário.
-- Mantém o email digitado no campo após um erro.
+#### [seguranca.php](seguranca.php)
+- `csrf_token()`, `csrf_campo()`, `csrf_valido()` — token secreto da sessão, campo oculto para os
+  formulários e conferência com `hash_equals()`;
+- `exigir_post()` — páginas de ação (exclusões) só aceitam `POST`;
+- `perfis()`, `eh_admin()`, `exigir_admin()` — níveis de acesso;
+- `login_bloqueado()`, `registrar_tentativa_falha()`, `limpar_tentativas()` — limite de tentativas;
+- `registrar_atividade()` — grava no registro de atividades (um erro aqui nunca desfaz a ação).
 
-### [logout.php](logout.php)
-Esvazia `$_SESSION`, expira o cookie de sessão, chama `session_destroy()` e volta ao login.
+#### [lista.php](lista.php)
+Ferramentas das listas: `ordenacao()` (só aceita colunas de uma lista fixa — o texto da URL nunca
+entra no `ORDER BY`), `th_ordenavel()`, `paginacao()`, `controles_paginacao()` (10/25/50 por
+página), `link_lista()` e `campos_ocultos()` (preservam os filtros), `data_da_url()`,
+`busca_da_url()` e `like()` (escapa `%` e `_` da busca).
 
-### [index.php](index.php)
-Painel inicial, organizado em três partes:
-- **Cabeçalho da página:** data por extenso, "Olá, <primeiro nome>!", imagem de boas-vindas e os
-  botões **Relacionamentos** e **Novo Pedido**.
-- **Visão geral:** um cartão por módulo (Clientes, Produtos, Pedidos) com o total de registros, um
-  indicador próprio (clientes que já fizeram pedido; produtos com estoque baixo; valor vendido e
-  pedidos abertos) e os atalhos **Cadastrar** e **Ver lista**. Os cartões vêm do array `$modulos`.
-- **Atividade recente:** os 5 últimos pedidos (`pedidos ⨝ clientes ⨝ itens_pedido`) e os produtos
-  com estoque até `ESTOQUE_BAIXO` (5) unidades.
+#### [ui.php](ui.php)
+Ícones SVG (`icone()`), `iniciais()`, `moeda()`, `converter_moeda()` (aceita `1.499,90`, `1499.90`,
+`1.500`), `formatar_documento()`, `formatar_cep()`, `endereco_cliente()`, listas de status e
+formas de pagamento, `badge_status()`, `flash()` / `flash_pegar()` e as constantes
+`ESTOQUE_BAIXO` (5) e `VALOR_MAXIMO` (R$ 99.999.999,99).
 
-Todos os números vêm de uma única consulta com subconsultas (`SELECT (SELECT COUNT(*) ...), ...`).
+#### [validacao.php](validacao.php)
+Mesmas regras do `js/formulario.js`: `validar_pessoa()` (nome, email e telefone), `validar_senha()`
+(mínimo de 6 caracteres e confirmação), `validar_cliente_completo()` (inclui CPF/CNPJ com dígitos
+verificadores — `cpf_valido()` e `cnpj_valido()` —, CEP com 8 dígitos, UF da lista e tamanhos) e
+os conversores `cliente_vazio()`, `cliente_do_post()`, `cliente_do_banco()` e `cliente_para_banco()`.
 
-### [header.php](header.php)
-Menu lateral fixo à esquerda, com os itens agrupados em **Geral** (Painel), **Cadastros**
-(Clientes, Produtos, Pedidos) e **Banco de dados** (Relacionamentos). O array `$secoes` liga as
-páginas internas ao item do menu (ex.: `cadastro.php` e `atualizar.php` → "Clientes"), que fica
-destacado. No rodapé do menu aparecem as iniciais e o nome do usuário logado e o botão de sair.
-Abaixo do menu, cada página exibe o breadcrumb definido em `$breadcrumb` (ex.: Painel › Clientes ›
-Atualizar Cliente). Em telas de até 900 px, o menu vira uma barra no topo.
+#### [header.php](header.php) e [footer.php](footer.php)
+O menu lateral agrupa **Geral** (Painel, Relatórios), **Cadastros** (Clientes, Produtos, Pedidos) e
+**Administração** (Usuários e Atividades, só para administradores, e Banco de dados). Tem o botão
+de modo claro/escuro, o bloco do usuário (leva a **Meu perfil**) e o botão **Sair** (formulário
+`POST`). Um pequeno script no início aplica o tema salvo antes de desenhar a página. O rodapé tem
+os toasts e o modal "Confirmar exclusão", que envia um `POST` com token para a página de exclusão.
 
-### [footer.php](footer.php)
-Rodapé, área dos toasts (mensagens de `flash()` e da própria página) e o modal genérico
-"Confirmar exclusão", usado por clientes, produtos e pedidos.
+#### [form_campos.php](form_campos.php) e [form_cliente.php](form_cliente.php)
+`form_campos.php` desenha qualquer lista de campos (`input`, `select` ou `textarea`) com rótulo,
+ajuda e erro. `form_cliente.php` define os campos do cliente em três seções — dados principais,
+endereço e observações — usadas no cadastro e na edição.
 
-### [cadastro.php](cadastro.php)
-Recebe `nome`, `email` e `telefone` por `POST`, valida campos obrigatórios (nome e email) e
-executa um `INSERT` com *prepared statement*.
+### Login e usuários
 
-### [clientes.php](clientes.php)
-Executa um `SELECT` ordenado por `ID DESC` (mais recentes primeiro) e monta a tabela. Cada linha
-recebe o atributo `data-search` (nome + email + telefone em minúsculas) usado pela busca em
-[js/busca.js](js/busca.js). Mostra o total de registros ao lado da busca. Cada cliente tem
-um avatar com as iniciais (`iniciais()` em `ui.php`) e botões só com ícone para editar/apagar.
-Em telas pequenas a tabela vira uma lista de cartões.
+#### [login.php](login.php) / [logout.php](logout.php)
+Ver o fluxo na [seção 5.2](#52-fluxo-de-login). O logout só funciona por `POST` com token, registra
+a saída e mostra "Você saiu do sistema" na tela de login.
 
-### [atualizar.php](atualizar.php)
-- Lê `id` da URL (convertido com `(int)`), busca o registro e redireciona para a lista se não existir.
-- No `POST`, valida com `validar_cliente()` e executa o `UPDATE`; erros aparecem embaixo de cada campo.
+#### [usuarios.php](usuarios.php), [usuario_cadastro.php](usuario_cadastro.php), [usuario_apagar.php](usuario_apagar.php)
+Somente administradores. Lista com busca, ordenação, paginação, perfil e quantidade de pedidos
+registrados. No cadastro, a senha é obrigatória; na edição, em branco mantém a atual (o
+administrador pode redefini-la). Email duplicado vira erro no campo. O próprio usuário é editado
+em `perfil.php`. A exclusão é recusada para o próprio usuário e para o último administrador; os
+pedidos do usuário apagado continuam (`ON DELETE SET NULL`).
 
-### [apagar.php](apagar.php)
-Busca o registro pelo `id` junto com a quantidade de pedidos (`LEFT JOIN pedidos`). Se o cliente
-tiver pedidos, não apaga e mostra o aviso (a FK `RESTRICT` também impediria no banco). Caso
-contrário, executa o `DELETE`, guarda a mensagem com `flash()` e redireciona para a lista, onde a
-mensagem aparece como toast. A confirmação acontece antes, no modal aberto por `js/app.js`.
+#### [perfil.php](perfil.php)
+Dois formulários: **Meus dados** (nome, email, telefone) e **Alterar senha** (exige a senha atual e
+uma nova diferente).
 
-### [produto_cadastro.php](produto_cadastro.php)
-Formulário de produto, no mesmo modelo do cadastro de cliente. Sem `id` faz `INSERT` (e limpa o
-formulário para o próximo); com `?id=ID` carrega o produto e o `POST` faz `UPDATE`. O preço é
-convertido por `converter_preco()`, que aceita `1.499,90` (formato da máscara), `1499,90`,
-`1499.90` e `1.500` (ponto como milhar, não como decimal), e é limitado a `PRECO_MAXIMO`
-(R$ 99.999.999,99, o máximo da coluna `DECIMAL(10,2)`). Na edição, o preço aparece com separador
-de milhar. Nome duplicado (erro `23000` da chave `UNIQUE`) vira mensagem no campo. Produto
-inexistente volta para a lista com um aviso.
+#### [atividades.php](atividades.php)
+Somente administradores. Linha do tempo agrupada por dia, com filtros por usuário, ação, tipo de
+registro, período e texto, e paginação. Cada item leva ao registro citado (exceto exclusões).
 
-### [produtos.php](produtos.php)
-Lista de produtos no mesmo formato da lista de clientes: busca instantânea, contador, botões de
-editar/apagar e cartões no celular. Usa `LEFT JOIN itens_pedido` + `SUM` para mostrar quantas
-unidades de cada produto já foram vendidas.
+### Painel e relatórios
 
-### [produto_apagar.php](produto_apagar.php)
-Conta em quantos itens de pedido o produto aparece; se for mais de zero, recusa a exclusão.
+#### [index.php](index.php)
+Cabeçalho com saudação e atalhos, aviso de **senha padrão** (enquanto o usuário usar `admin123`),
+um cartão por módulo com total e indicador próprio, os 5 últimos pedidos e os produtos com estoque
+até `ESTOQUE_BAIXO`. Os valores vêm de `vw_pedidos`.
 
-### [pedidos.php](pedidos.php)
-Lista os pedidos com `INNER JOIN clientes`, `LEFT JOIN usuarios` e `LEFT JOIN itens_pedido`,
-agrupando (`GROUP BY`) para calcular a quantidade de itens e o total de cada pedido. Aceita o
-filtro `?cliente=ID` (usado pelo link da coluna "Pedidos" na lista de clientes). Tem a mesma busca
-instantânea da lista de clientes (por número, cliente, usuário ou status).
+#### [relatorios.php](relatorios.php), [relatorios_funcoes.php](relatorios_funcoes.php), [relatorio_exportar.php](relatorio_exportar.php)
+Período por atalho (30/90 dias, 12 meses, este ano, tudo) ou datas livres. Indicadores
+(faturamento líquido de descontos, pedidos, ticket médio, itens) com variação em relação ao período
+anterior de mesma duração; gráfico de colunas em HTML/CSS (por dia até 31 dias, senão por mês) com
+dica ao passar o mouse e tabela de dados; pedidos por status; produtos mais vendidos; melhores
+clientes. A exportação gera CSV no padrão do Excel brasileiro (`;`, vírgula decimal, UTF-8 com
+BOM) e neutraliza textos que começam com `= + - @` (injeção de fórmula).
 
-### [pedido_novo.php](pedido_novo.php)
-Formulário com cliente, status, observação e linhas de itens (produto + quantidade). No `POST`,
-dentro de **uma transação**: insere em `pedidos` (com `USUARIO_ID` = usuário logado), insere cada
-item em `itens_pedido` copiando o preço atual de `produtos` (`INSERT ... SELECT`) e baixa o
-estoque. Se faltar estoque, faz `rollBack()` e nada é gravado.
+### Clientes
 
-### [pedido_ver.php](pedido_ver.php)
-Mostra os dados do pedido, do cliente e do usuário (JOINs) e a tabela de itens
-(`itens_pedido INNER JOIN produtos`) com subtotal e total. Permite alterar o status, aplicando as
-regras de estoque da seção 6.8.
+#### [clientes.php](clientes.php)
+Busca no banco por nome, email, telefone, cidade e CPF/CNPJ (com ou sem pontuação), ordenação
+clicando no cabeçalho, paginação e colunas de pedidos e total gasto. Botões de importar, ficha,
+editar e apagar (este só para administradores). No celular a tabela vira uma lista de cartões.
 
-### [pedido_apagar.php](pedido_apagar.php)
-Devolve o estoque (se o pedido não estava cancelado) e apaga o pedido; os itens são removidos pelo
-próprio banco (`ON DELETE CASCADE`).
+#### [cadastro.php](cadastro.php) / [atualizar.php](atualizar.php)
+Usam `form_cliente.php` e `validar_cliente_completo()`. CPF/CNPJ duplicado (erro `23000` da chave
+`UNIQUE`) vira mensagem no campo. Após cadastrar, abre a ficha do novo cliente.
 
-### [relacionamentos.php](relacionamentos.php)
-Página de apresentação do modelo: diagrama SVG das 5 tabelas (com PK/FK, cardinalidade 1–N e
-quantidade de registros), tabela explicando cada relacionamento e uma consulta ao vivo com `JOIN`
-nas 5 tabelas, exibindo o SQL e o resultado.
+#### [cliente_ver.php](cliente_ver.php)
+Contatos, documento, endereço, observações, indicadores (total gasto, pedidos, ticket médio, última
+compra), histórico de pedidos e os 5 produtos mais comprados.
 
-### [estoque.php](estoque.php)
-Funções `devolver_estoque()` e `baixar_estoque()` (usa `SELECT ... FOR UPDATE` para travar as
-linhas dos produtos durante a transação).
+#### [cliente_importar.php](cliente_importar.php)
+Recebe um `.csv` de até 2 MB / 1000 linhas. Detecta o separador (`;`, `,` ou tabulação) e a
+codificação (UTF-8 ou Windows-1252, padrão do Excel), reconhece os cabeçalhos com ou sem acento e
+com sinônimos (`e-mail`, `celular`, `cpf`, `estado`...), valida cada linha como no cadastro e
+ignora emails e CPF/CNPJ já cadastrados (inclusive repetidos na própria planilha). A opção
+**Somente verificar** mostra o resultado sem gravar. `?modelo=1` baixa uma planilha de exemplo.
 
-### [usuarios.sql](usuarios.sql)
-Cria a tabela `usuarios`, garante a coluna `TELEFONE` (sintaxe `ADD COLUMN IF NOT EXISTS`,
-própria do MariaDB) e insere o administrador padrão apenas se ele ainda não existir
-(`INSERT ... SELECT ... WHERE NOT EXISTS`).
+#### [apagar.php](apagar.php)
+Somente `POST` de administrador. Recusa cliente com pedidos (a FK `RESTRICT` também impediria).
 
-### [clientes.sql](clientes.sql)
-Cria a tabela `clientes` (se ainda não existir) e garante a coluna `CRIADO_EM` em tabelas
-criadas anteriormente sem ela.
+### Produtos e estoque
 
-### [relacionamentos.sql](relacionamentos.sql)
-Converte `usuarios` e `clientes` para InnoDB, cria `produtos`, `pedidos` e `itens_pedido` com as
-chaves estrangeiras e `CHECK`s, e insere dados de exemplo apenas se ainda não existirem
-(`INSERT IGNORE` e `INSERT ... SELECT ... WHERE NOT EXISTS`).
+#### [produtos.php](produtos.php)
+Busca por nome/descrição, filtro por situação do estoque (baixo, esgotado, normal), ordenação e
+paginação. "Vendidos" ignora pedidos cancelados. Estoque baixo e esgotado aparecem destacados.
+
+#### [produto_cadastro.php](produto_cadastro.php)
+Sem `id`: cadastra com o **estoque inicial**, lançado como movimento `CADASTRO`. Com `?id=ID`: edita
+nome, descrição e preço; o estoque aparece só para leitura, com o atalho para movimentar. Nome
+duplicado vira mensagem no campo.
+
+#### [produto_estoque.php](produto_estoque.php)
+Indicadores (estoque atual, valor em estoque, entradas e saídas em 30 dias), formulário de
+**entrada**, **saída** ou **ajuste** (sempre com motivo) e o histórico paginado, filtrável por tipo,
+com link para o pedido de cada venda/devolução.
+
+#### [produto_apagar.php](produto_apagar.php)
+Somente `POST` de administrador. Recusa produto que já aparece em pedidos.
+
+#### [estoque.php](estoque.php)
+`movimentar_estoque()`, `itens_do_pedido()`, `baixar_estoque()`, `devolver_estoque()` e
+`ajustar_estoque_pedido()` (ver [seção 6.8](#68-regras-de-estoque)).
+
+### Pedidos
+
+#### [pedidos.php](pedidos.php)
+Lê de `vw_pedidos` com `INNER JOIN clientes` e `LEFT JOIN usuarios`. Filtros combináveis: número
+ou cliente, status, período e `?cliente=ID`. O "total vendido" considera todos os pedidos
+filtrados (não só a página atual). Pedidos abertos têm atalho para editar.
+
+#### [pedido_novo.php](pedido_novo.php)
+Cadastro e edição (só pedidos **Abertos**), com forma de pagamento e desconto em reais (não pode
+passar do valor dos itens). Ver o fluxo na [seção 5.3.1](#531-fluxo-do-pedido).
+
+#### [pedido_ver.php](pedido_ver.php)
+Dados do pedido, do cliente e do usuário, itens, subtotal, desconto e total. Permite alterar o
+status (aplicando as regras de estoque) e tem os botões **Imprimir / PDF**, **Editar** (se aberto) e
+**Apagar** (administradores).
+
+#### [pedido_imprimir.php](pedido_imprimir.php)
+Comprovante sempre claro, como papel: dados do cliente (com CPF/CNPJ e endereço), itens, totais,
+pagamento e observação. O botão chama `window.print()`; na janela de impressão, "Salvar como PDF"
+gera o arquivo. O CSS de impressão esconde a barra de botões.
+
+#### [pedido_apagar.php](pedido_apagar.php)
+Somente `POST` de administrador. Devolve o estoque (se o pedido não estava cancelado) e apaga o
+pedido; os itens são removidos pelo banco (`ON DELETE CASCADE`).
+
+### Banco de dados
+
+#### [relacionamentos.php](relacionamentos.php)
+Diagrama SVG das 5 tabelas principais (PK/FK, cardinalidade 1–N e quantidade de registros), tabela
+explicando cada relacionamento e uma consulta ao vivo com `JOIN` nas 5 tabelas.
+
+#### [usuarios.sql](usuarios.sql), [clientes.sql](clientes.sql), [relacionamentos.sql](relacionamentos.sql), [melhorias.sql](melhorias.sql)
+Scripts idempotentes (podem rodar várias vezes): `CREATE TABLE IF NOT EXISTS`,
+`ADD COLUMN IF NOT EXISTS`, `ADD UNIQUE KEY IF NOT EXISTS`, `CREATE OR REPLACE VIEW` e
+`INSERT ... WHERE NOT EXISTS`.
 
 ---
 
 ## 8. Front-end (CSS e JavaScript)
 
 ### 8.1 [css/style.css](css/style.css)
-Folha de estilo única para todas as telas, com fonte Arial. As cores, espaçamentos (`--space-1`
-a `--space-6`), raios (`--radius-*`) e sombras (`--shadow-*`) ficam em variáveis no `:root`.
+Folha de estilo única, com a fonte **Inter** (Google Fonts; sem internet, usa a fonte do sistema).
+Cores, espaçamentos (`--space-1` a `--space-6`), raios (`--radius-*`) e sombras (`--shadow-*`) ficam
+em variáveis no `:root`. Paleta em tons *slate* com azul de destaque, cartões brancos com borda
+sutil e menu lateral escuro.
 
-**Paleta:** fundo da página cinza-azulado (`--page-bg: #e3e9ef`), cartões em off-white
-(`--surface: #f8fafc`, menos ofuscante que branco puro) e menu lateral azul-marinho
-(`--header-bg`, `--header-text`, `--header-muted`). A largura do menu fica em `--sidebar-w`.
+**Modo escuro:** o bloco `[data-tema="escuro"]` redefine as variáveis (fundos, textos, bordas,
+cores de status). O botão do menu alterna o tema e salva a escolha no `localStorage`; sem escolha
+salva, segue o modo do sistema operacional (`prefers-color-scheme`). A cor do gráfico foi conferida
+para contraste nos dois temas.
 
-**Layout:** `.sidebar` é fixa à esquerda e o `.container` ganha `margin-left` igual à largura do
-menu; `main`, `footer` e `.breadcrumb` ficam centralizados com até 1180 px (o modal e os toasts
-não entram nessa regra, pois têm posição própria). Abaixo de 900 px, o menu passa para o topo.
+**Layout:** `.sidebar` fixa à esquerda (no topo abaixo de 900 px); conteúdo centralizado com até
+1180 px; tabelas viram cartões no celular; `@media print` para o comprovante.
 
-**Componentes:** menu lateral (`.nav-grupo`, `.nav-link.active`), breadcrumb, painel
-(`.page-head`, `.secao-titulo`, `.modulo`, `.painel`), formulários com erro por campo
-(`.has-error`), tabelas que viram cartões no celular, etiquetas de status (`.badge-*`), itens do
-pedido (`.item-linha`), diagrama da página de relacionamentos (`.er-*`), alertas, toasts
-(`.toast`), modal (`.modal`), botões (`.btn-primary`, `.btn-secondary`, `.btn-outline`,
-`.btn-danger`, `.btn-danger-outline`, `.btn-icon`, `.btn-sm`) e a tela de login.
+**Componentes principais:** menu e breadcrumb, cartões do painel (`.modulo`, `.painel`,
+`.indicador`), filtros e paginação (`.filtros`, `.th-ordenavel`, `.paginacao`), gráfico
+(`.grafico`, `.coluna`), rankings (`.ranking`), formulários em seções (`.form-secao`,
+`.form-grid-4`, `.campo-duplo`), etiquetas (`.badge-*`), linha do tempo (`.linha-tempo`),
+comprovante (`.comprovante`), alertas, toasts, modal e botões.
 
 ### 8.2 [js/formulario.js](js/formulario.js)
-Usado por qualquer `<form data-validar>` (cadastro e atualização). As regras são as mesmas de
-`validacao.php`:
+Usado por qualquer `<form data-validar>` (cliente, usuário, perfil). `data-entidade` muda o texto
+das mensagens ("do cliente" / "do usuário"). Valida no `blur`, revalida enquanto digita depois de
+um erro e bloqueia o envio focando o primeiro campo inválido. Regras: nome, email, telefone (com
+máscara), CPF/CNPJ (dígitos verificadores, `cpfValido()` / `cnpjValido()`), CEP, senha e
+confirmação.
 
-| Função                | O que faz                                                                 |
-|-----------------------|---------------------------------------------------------------------------|
-| validação no `blur`   | Valida o campo e mostra o erro embaixo dele (`.has-error`)                |
-| validação no `input`  | Depois de um erro, revalida enquanto o usuário digita                     |
-| `formatarTelefone()`  | Máscara automática: `(11) 9999-9999` ou `(11) 99999-9999` (máx. 11 dígitos) |
-| validação no `submit` | Bloqueia o envio e foca o primeiro campo inválido                         |
+### 8.3 [js/app.js](js/app.js)
+Carregado em todas as páginas internas (via `footer.php`): toasts que fecham sozinhos, modal de
+exclusão (define o `action` do formulário `POST`), selects com `data-auto-submit` que aplicam o
+filtro ao trocar (voltando para a página 1) e o botão de modo claro/escuro.
 
-### 8.2.1 [js/app.js](js/app.js)
-Carregado em todas as páginas internas (via `footer.php`). Fecha os toasts sozinho após 4,5 s
-(pausa com o mouse em cima) e abre o modal de confirmação para links com
-`data-confirmar-exclusao`.
+### 8.4 [js/endereco.js](js/endereco.js)
+Máscara de CPF (`000.000.000-00`) ou CNPJ (`00.000.000/0000-00`) conforme a quantidade de dígitos,
+máscara de CEP e, ao completar os 8 dígitos, consulta a **ViaCEP** e preenche logradouro, bairro,
+cidade e UF (o complemento só se estiver vazio). Sem internet ou CEP inexistente, mostra um aviso e
+o endereço é digitado à mão.
 
-### 8.3 [js/busca.js](js/busca.js)
-Busca instantânea (sem recarregar a página), usada nas listas de **clientes**, **produtos** e
-**pedidos**: a cada tecla, esconde as linhas `<tr data-search>` cujo texto não contém o termo e
-atualiza o contador ("2 de 5 produtos"). A página indica o campo com `data-busca` e as palavras do
-contador com `data-singular`/`data-plural` em `#resultadoBusca`.
+### 8.5 [js/pedido.js](js/pedido.js)
+Adiciona/remove linhas de item e recalcula subtotal, desconto e total (o desconto acima do
+subtotal fica destacado). O cálculo é só visual — o servidor recalcula tudo.
 
-### 8.4 [js/pedido.js](js/pedido.js)
-No formulário de novo pedido: o botão "Adicionar produto" clona uma linha de item, a lixeira
-remove a linha (exceto a última) e, a cada mudança, recalcula o subtotal de cada linha e o total
-do pedido (usando o `data-preco` de cada opção). O cálculo é só visual — o servidor usa o preço
-gravado em `produtos`.
+### 8.6 [js/moeda.js](js/moeda.js)
+Máscara de reais para campos com `data-mascara-moeda` (preço do produto e desconto do pedido): o
+valor se forma da direita para a esquerda, como em uma calculadora (`150000` → `1.500,00`), até
+R$ 99.999.999,99.
 
-### 8.5 [js/moeda.js](js/moeda.js)
-Máscara de reais para campos com `data-mascara-moeda` (o preço do produto). O usuário digita só os
-números e o valor se forma da direita para a esquerda, como em uma calculadora: `1` → `0,01`,
-`150000` → `1.500,00`, `100000000` → `1.000.000,00`. Aceita até 10 dígitos (R$ 99.999.999,99) e
-formata também o valor que já vem preenchido na edição (`3499,90` → `3.499,90`).
+### 8.7 [js/relatorios.js](js/relatorios.js)
+Dica do gráfico de faturamento ao passar o mouse ou focar uma coluna com o teclado (`Tab`); `Esc`
+fecha.
 
 ---
 
@@ -646,16 +822,24 @@ formata também o valor que já vem preenchido na edição (`3499,90` → `3.499
 | Medida                                   | Onde                                   |
 |------------------------------------------|----------------------------------------|
 | *Prepared statements* (anti SQL Injection) | Todas as consultas com parâmetros     |
+| `ORDER BY` só com colunas de uma lista fixa | `lista.php` (`ordenacao()`)          |
+| Token **CSRF** em todo formulário `POST` (inclusive login e logout) | `seguranca.php`, conferido em `auth.php` |
+| Exclusões somente por `POST` (link GET é recusado) | `exigir_post()` nas páginas de exclusão |
+| Níveis de acesso (Administrador / Operador) | `exigir_admin()`, menu e botões condicionais |
+| Perfil recarregado do banco a cada página | `auth.php` |
+| Limite de tentativas de login (5 por email / 20 por IP em 15 min) | `login.php`, tabela `tentativas_login` |
+| Senha padrão fora da tela de login + aviso para trocá-la | `login.php`, `index.php` |
+| Troca de senha exige a senha atual | `perfil.php` |
 | Senhas com hash bcrypt                   | `password_hash` / `password_verify`    |
-| Regeneração do ID de sessão no login     | `login.php` (`session_regenerate_id`)  |
+| Regeneração do ID de sessão no login e na troca de senha | `login.php`, `perfil.php` |
+| Cookie de sessão `httponly` + `samesite=Lax` (+ `secure` em HTTPS) | `sessao.php` |
 | Escape de saída (anti XSS)               | `htmlspecialchars()` nos dados exibidos |
 | Validação do `redirect` (anti open redirect) | `login.php` (regex)                 |
-| Conversão do `id` para inteiro           | Páginas de atualização, detalhe e exclusão |
-| Confirmação antes de excluir             | Modal em `js/app.js` (`data-confirmar-exclusao`) |
-| Chaves estrangeiras com `ON DELETE` (integridade referencial) | `relacionamentos.sql`, `apagar.php`, `produto_apagar.php` |
-| Restrições `CHECK` (preço, estoque e quantidade não negativos) | `relacionamentos.sql` |
-| Transações (`commit` / `rollBack`): o pedido nunca fica gravado pela metade | `pedido_novo.php`, `pedido_ver.php`, `pedido_apagar.php` |
-| `SELECT ... FOR UPDATE`: dois pedidos simultâneos não vendem a mesma unidade | `estoque.php` |
+| CSV sem injeção de fórmula               | `relatorio_exportar.php`               |
+| Upload limitado (tamanho, extensão, linhas) | `cliente_importar.php`              |
+| Registro de atividades (auditoria)       | `registrar_atividade()`, `atividades.php` |
+| Chaves estrangeiras, `UNIQUE` e `CHECK` (integridade) | scripts `.sql` |
+| Transações + `SELECT ... FOR UPDATE`: pedido e estoque nunca ficam pela metade | `pedido_novo.php`, `pedido_ver.php`, `pedido_apagar.php`, `estoque.php` |
 
 ---
 
@@ -663,20 +847,9 @@ formata também o valor que já vem preenchido na edição (`3499,90` → `3.499
 
 ### 10.1 ✅ Corrigido: mistura entre as tabelas `usuarios` e `clientes`
 
-Antes, as páginas do CRUD usavam tabelas diferentes para a mesma operação (cadastro e
-listagem em `usuarios`, edição e exclusão em `clientes`). Isso fazia o cadastro falhar
-(`usuarios.SENHA` é `NOT NULL`), a lista mostrar os usuários do sistema em vez dos clientes, e
-editar/apagar não terem efeito visível.
-
-**Situação atual:** cada tabela tem um único papel.
-
-| Arquivo         | Leitura (`SELECT`) | Escrita                  |
-|-----------------|--------------------|--------------------------|
-| `login.php`     | `FROM usuarios`    | —                        |
-| `cadastro.php`  | —                  | `INSERT INTO clientes`   |
-| `clientes.php`  | `FROM clientes`    | —                        |
-| `atualizar.php` | `FROM clientes`    | `UPDATE clientes`        |
-| `apagar.php`    | `FROM clientes`    | `DELETE FROM clientes`   |
+Antes, as páginas do CRUD usavam tabelas diferentes para a mesma operação (cadastro e listagem em
+`usuarios`, edição e exclusão em `clientes`). Hoje cada tabela tem um único papel: `usuarios` é
+só para login; `clientes` guarda os clientes.
 
 > Se você já cadastrou "clientes" na tabela `usuarios` antes da correção, eles continuam lá.
 > Para copiá-los para `clientes` (ignorando o admin), use:
@@ -688,19 +861,19 @@ WHERE EMAIL <> 'admin@sistema.com';
 ```
 
 ### 10.2 ✅ Já implementado
-- Validação do formato do email no servidor (`filter_var($email, FILTER_VALIDATE_EMAIL)`).
-- Nome de produto duplicado tratado (captura da `PDOException` código `23000`).
+- Proteção CSRF, exclusões por `POST`, níveis de acesso e limite de tentativas de login.
+- Paginação, ordenação e filtros em todas as listas.
+- Histórico de estoque, registro de atividades, desconto e forma de pagamento.
+- CPF/CNPJ com validação e sem duplicidade; endereço com busca pelo CEP; importação por CSV.
 - Exclusão de cliente com pedidos e de produto já vendido recusada com aviso.
-- Fuso horário `America/Sao_Paulo` e `SET NAMES utf8mb4` no script SQL.
 
 ### 10.3 Melhorias sugeridas
-- As exclusões e a mudança de status podem ser disparadas por um link externo (CSRF). O ideal é
-  usar `POST` com um token CSRF.
-- Tratar email duplicado de **clientes** (capturar `PDOException` código `23000`), como já é feito
-  com os nomes de produtos.
-- Remover a dica de credenciais padrão da tela de login em produção.
-- Paginar as listagens quando o volume de registros crescer.
-- Criar perfis de acesso (ex.: só administradores excluem pedidos).
+- **Email de cliente duplicado:** a importação ignora, mas o cadastro manual ainda permite (a
+  coluna `clientes.EMAIL` não é `UNIQUE`, para não quebrar bancos que já tenham repetidos).
+- **Recuperação de senha por email:** hoje um administrador redefine a senha.
+- **HTTPS** ao publicar fora da rede local (o cookie passa a ser `secure` automaticamente).
+- **Backup automático** do banco (ex.: `mysqldump` agendado).
+- **Ordenação no celular:** no layout de cartões o cabeçalho da tabela fica oculto.
 
 ---
 

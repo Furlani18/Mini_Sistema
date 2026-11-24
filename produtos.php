@@ -149,11 +149,15 @@ $totalCadastrados = $filtrando ? (int)$pdo->query('SELECT COUNT(*) FROM produtos
                                             <td class="num" data-label="Vendidos"><?php echo (int)$p['VENDIDOS']; ?></td>
                                             <td class="col-actions">
                                                 <div class="action-buttons">
+                                                    <a href="produto_estoque.php?id=<?php echo $p['ID']; ?>" class="btn-icon" title="Estoque e histórico"
+                                                       aria-label="Estoque e histórico de <?php echo $nome; ?>"><?php echo icone('movimento'); ?></a>
                                                     <a href="produto_cadastro.php?id=<?php echo $p['ID']; ?>" class="btn-icon" title="Editar"
                                                        aria-label="Editar <?php echo $nome; ?>"><?php echo icone('editar'); ?></a>
+                                                    <?php if (eh_admin()): ?>
                                                     <a href="produto_apagar.php?id=<?php echo $p['ID']; ?>" class="btn-icon btn-icon-danger" title="Apagar"
                                                        aria-label="Apagar <?php echo $nome; ?>"
                                                        data-confirmar-exclusao="<?php echo $nome; ?>"><?php echo icone('lixeira'); ?></a>
+                                                    <?php endif; ?>
                                                 </div>
                                             </td>
                                         </tr>

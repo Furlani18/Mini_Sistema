@@ -6,6 +6,7 @@
 // O último item (link null) é a página atual. A "Home" é adicionada automaticamente.
 
 require_once __DIR__ . '/ui.php';
+require_once __DIR__ . '/seguranca.php';
 
 $paginaAtual = basename($_SERVER['SCRIPT_NAME']);
 
@@ -17,8 +18,10 @@ $secoes = [
     'cliente_ver.php'      => 'clientes.php',
     'usuario_cadastro.php' => 'usuarios.php',
     'usuario_apagar.php'   => 'usuarios.php',
+    'cliente_importar.php' => 'clientes.php',
     'produto_cadastro.php' => 'produtos.php',
     'produto_apagar.php'   => 'produtos.php',
+    'produto_estoque.php'  => 'produtos.php',
     'pedido_novo.php'      => 'pedidos.php',
     'pedido_ver.php'       => 'pedidos.php',
     'pedido_apagar.php'    => 'pedidos.php',
@@ -38,13 +41,26 @@ $menu = [
     ],
     'Administração' => [
         'usuarios.php'        => ['escudo', 'Usuários'],
+        'atividades.php'      => ['historico', 'Atividades'],
         'relacionamentos.php' => ['banco', 'Banco de dados'],
     ],
 ];
+// Operadores não veem as funções exclusivas de administrador
+if (!eh_admin()) {
+    unset($menu['Administração']['usuarios.php'], $menu['Administração']['atividades.php']);
+}
 
 $nomeUsuario = $_SESSION['usuario_nome'] ?? '';
 $breadcrumb = $breadcrumb ?? [];
 ?>
+<script>
+    // Aplica o tema salvo (ou o do sistema operacional) antes de desenhar a página, para não "piscar"
+    (function () {
+        var tema = localStorage.getItem('tema');
+        if (!tema && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) tema = 'escuro';
+        if (tema === 'escuro') document.documentElement.setAttribute('data-tema', 'escuro');
+    })();
+</script>
 <header class="sidebar">
     <a href="index.php" class="sidebar-brand">
         <span class="brand-mark">CRM</span>
@@ -64,16 +80,24 @@ $breadcrumb = $breadcrumb ?? [];
         <?php endforeach; ?>
     </nav>
 
+    <button type="button" class="nav-link nav-tema" data-alternar-tema>
+        <?php echo icone('lua', 'icone-tema-escuro'); ?><?php echo icone('sol', 'icone-tema-claro'); ?>
+        <span class="icone-tema-escuro">Modo escuro</span><span class="icone-tema-claro">Modo claro</span>
+    </button>
+
     <div class="sidebar-user<?php echo $paginaAtual === 'perfil.php' ? ' active' : ''; ?>">
         <a href="perfil.php" class="sidebar-user-link" title="Meu perfil"
            <?php echo $paginaAtual === 'perfil.php' ? 'aria-current="page"' : ''; ?>>
             <span class="sidebar-avatar" aria-hidden="true"><?php echo htmlspecialchars(iniciais($nomeUsuario ?: '?')); ?></span>
             <span class="sidebar-user-info">
                 <strong><?php echo htmlspecialchars($nomeUsuario); ?></strong>
-                <small>Meu perfil</small>
+                <small><?php echo perfis()[$_SESSION['usuario_perfil'] ?? ''] ?? 'Usuário'; ?> · Meu perfil</small>
             </span>
         </a>
-        <a href="logout.php" class="sidebar-sair" title="Sair" aria-label="Sair do sistema"><?php echo icone('sair'); ?></a>
+        <form method="POST" action="logout.php" class="sidebar-sair-form">
+            <?php echo csrf_campo(); ?>
+            <button type="submit" class="sidebar-sair" title="Sair" aria-label="Sair do sistema"><?php echo icone('sair'); ?></button>
+        </form>
     </div>
 </header>
 

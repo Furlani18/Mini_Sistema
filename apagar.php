@@ -3,8 +3,11 @@ require_once 'auth.php';
 require_once 'conexao.php';
 require_once 'ui.php';
 
-// A confirmação é feita antes, no modal (js/app.js). Aqui o cliente é removido
-// e o usuário volta para a lista, onde a mensagem aparece como toast.
+// A confirmação é feita antes, no modal (js/app.js), que envia um POST com token CSRF.
+// Só administradores apagam. Depois, o usuário volta para a lista, onde a mensagem aparece como toast.
+
+exigir_post('clientes.php');
+exigir_admin('clientes.php');
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
@@ -24,6 +27,7 @@ if ($cliente && $cliente['PEDIDOS'] > 0) {
 } elseif ($cliente) {
     $delete = $pdo->prepare('DELETE FROM clientes WHERE ID = ?');
     $delete->execute([$id]);
+    registrar_atividade($pdo, 'APAGOU', "Apagou o cliente '{$cliente['NOME']}'", 'cliente', $id);
     flash('success', "Cliente '{$cliente['NOME']}' removido com sucesso!");
 } else {
     flash('error', 'Cliente não encontrado!');

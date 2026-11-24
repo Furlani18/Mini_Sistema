@@ -11,8 +11,14 @@ $q = busca_da_url();
 $where = '';
 $parametros = [];
 if ($q !== '') {
-    $where = 'WHERE c.NOME LIKE ? OR c.EMAIL LIKE ? OR c.TELEFONE LIKE ?';
-    $parametros = [like($q), like($q), like($q)];
+    $where = 'WHERE c.NOME LIKE ? OR c.EMAIL LIKE ? OR c.TELEFONE LIKE ? OR c.CIDADE LIKE ?';
+    $parametros = [like($q), like($q), like($q), like($q)];
+    // CPF/CNPJ é gravado só com dígitos: "123.456" também encontra "123456…"
+    $digitos = preg_replace('/\D/', '', $q);
+    if (strlen($digitos) >= 3) {
+        $where .= ' OR c.CPF_CNPJ LIKE ?';
+        $parametros[] = like($digitos);
+    }
 }
 
 $ordem = ordenacao([
@@ -29,11 +35,10 @@ $pag = paginacao((int)$stmt->fetchColumn());
 
 $stmt = $pdo->prepare(
     "SELECT c.ID AS id, c.NOME AS nome, c.EMAIL AS email, c.TELEFONE AS telefone,
-            COUNT(DISTINCT p.ID) AS pedidos,
-            COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN i.QUANTIDADE * i.PRECO_UNITARIO END), 0) AS gasto
+            COUNT(p.ID) AS pedidos,
+            COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.TOTAL END), 0) AS gasto
        FROM clientes c
-       LEFT JOIN pedidos p ON p.CLIENTE_ID = c.ID
-       LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
+       LEFT JOIN vw_pedidos p ON p.CLIENTE_ID = c.ID
        $where
       GROUP BY c.ID, c.NOME, c.EMAIL, c.TELEFONE
       ORDER BY {$ordem['sql']}, c.ID DESC
@@ -61,7 +66,10 @@ $totalCadastrados = $q === '' ? $pag['total'] : (int)$pdo->query('SELECT COUNT(*
             <div class="list-container">
                 <div class="list-header">
                     <h2 class="page-title"><?php echo icone('usuarios'); ?> Lista de Clientes</h2>
-                    <a href="cadastro.php" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Cliente</a>
+                    <div class="page-head-acoes">
+                        <a href="cliente_importar.php" class="btn btn-outline"><?php echo icone('upload'); ?> Importar</a>
+                        <a href="cadastro.php" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Cliente</a>
+                    </div>
                 </div>
 
                 <?php if ($totalCadastrados === 0): ?>
@@ -77,7 +85,7 @@ $totalCadastrados = $q === '' ? $pag['total'] : (int)$pdo->query('SELECT COUNT(*
                         <div class="search-input">
                             <?php echo icone('busca'); ?>
                             <input type="search" id="buscaClientes" name="q" value="<?php echo htmlspecialchars($q); ?>"
-                                   placeholder="Buscar por nome, email ou telefone" autocomplete="off">
+                                   placeholder="Buscar por nome, email, telefone, CPF/CNPJ ou cidade" autocomplete="off">
                         </div>
                         <button type="submit" class="btn btn-outline"><?php echo icone('busca'); ?> Buscar</button>
                         <?php if ($q !== ''): ?>
@@ -129,11 +137,13 @@ $totalCadastrados = $q === '' ? $pag['total'] : (int)$pdo->query('SELECT COUNT(*
                                                        class="btn-icon"
                                                        title="Editar"
                                                        aria-label="Editar <?php echo $nome; ?>"><?php echo icone('editar'); ?></a>
+                                                    <?php if (eh_admin()): ?>
                                                     <a href="apagar.php?id=<?php echo $cliente['id']; ?>"
                                                        class="btn-icon btn-icon-danger"
                                                        title="Apagar"
                                                        aria-label="Apagar <?php echo $nome; ?>"
                                                        data-confirmar-exclusao="<?php echo $nome; ?>"><?php echo icone('lixeira'); ?></a>
+                                                    <?php endif; ?>
                                                 </div>
                                             </td>
                                         </tr>

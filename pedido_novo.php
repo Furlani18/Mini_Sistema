@@ -4,28 +4,81 @@ require_once 'conexao.php';
 require_once 'ui.php';
 require_once 'estoque.php';
 
-// Registro de um novo pedido. Grava em 2 tabelas dentro de UMA transação:
-//   1) pedidos       → 1 linha (cliente, usuário logado, status, observação)
+// Registro e edição de pedido (mesmo formulário):
+//   pedido_novo.php            → novo pedido
+//   pedido_novo.php?cliente=ID → novo pedido com o cliente já escolhido
+//   pedido_novo.php?id=ID      → editar um pedido ABERTO (itens, cliente, desconto, pagamento)
+//
+// Grava em 2 tabelas dentro de UMA transação:
+//   1) pedidos       → 1 linha (cliente, usuário logado, status, observação, desconto, pagamento)
 //   2) itens_pedido  → 1 linha por produto (quantidade + preço do momento)
-// e baixa o estoque em produtos. Se algo falhar, nada é gravado (rollBack).
+// e movimenta o estoque (com histórico). Se algo falhar, nada é gravado (rollBack).
+
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$editando = $id > 0;
+$itensAntes = [];      // [produto_id => quantidade] já gravados (edição)
+$precosAntes = [];     // [produto_id => preço unitário] já gravados (edição)
+
+if ($editando) {
+    $stmt = $pdo->prepare('SELECT CLIENTE_ID, STATUS, OBSERVACAO, DESCONTO, FORMA_PAGAMENTO FROM pedidos WHERE ID = ?');
+    $stmt->execute([$id]);
+    $pedido = $stmt->fetch();
+    if (!$pedido) {
+        flash('error', 'Pedido não encontrado.');
+        header('Location: pedidos.php');
+        exit;
+    }
+    if ($pedido['STATUS'] !== 'ABERTO') {
+        flash('error', 'Só pedidos com status "Aberto" podem ser editados.');
+        header('Location: pedido_ver.php?id=' . $id);
+        exit;
+    }
+    $stmt = $pdo->prepare('SELECT PRODUTO_ID, QUANTIDADE, PRECO_UNITARIO FROM itens_pedido WHERE PEDIDO_ID = ? ORDER BY ID');
+    $stmt->execute([$id]);
+    foreach ($stmt->fetchAll() as $item) {
+        $itensAntes[(int)$item['PRODUTO_ID']] = (int)$item['QUANTIDADE'];
+        $precosAntes[(int)$item['PRODUTO_ID']] = (float)$item['PRECO_UNITARIO'];
+    }
+}
 
 $clientes = $pdo->query('SELECT ID, NOME, EMAIL FROM clientes ORDER BY NOME')->fetchAll();
 $produtos = $pdo->query('SELECT ID, NOME, PRECO, ESTOQUE FROM produtos ORDER BY NOME')->fetchAll();
 $statusNovos = array_diff_key(status_pedidos(), ['CANCELADO' => true]);
 
 $erros = [];
-$valores = [
-    'cliente_id' => isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0,
-    'status'     => 'ABERTO',
-    'observacao' => '',
-];
-$linhas = [['produto_id' => 0, 'quantidade' => 1]];
+if ($editando) {
+    $valores = [
+        'cliente_id'      => (int)$pedido['CLIENTE_ID'],
+        'status'          => 'ABERTO',
+        'observacao'      => $pedido['OBSERVACAO'] ?? '',
+        'desconto'        => (float)$pedido['DESCONTO'] > 0 ? number_format((float)$pedido['DESCONTO'], 2, ',', '.') : '',
+        'forma_pagamento' => $pedido['FORMA_PAGAMENTO'] ?? '',
+    ];
+    $linhas = [];
+    foreach ($itensAntes as $produtoId => $qtd) {
+        $linhas[] = ['produto_id' => $produtoId, 'quantidade' => $qtd];
+    }
+} else {
+    $valores = [
+        'cliente_id'      => isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0,
+        'status'          => 'ABERTO',
+        'observacao'      => '',
+        'desconto'        => '',
+        'forma_pagamento' => '',
+    ];
+    $linhas = [];
+}
+if (!$linhas) {
+    $linhas = [['produto_id' => 0, 'quantidade' => 1]];
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $valores = [
-        'cliente_id' => (int)($_POST['cliente_id'] ?? 0),
-        'status'     => (string)($_POST['status'] ?? 'ABERTO'),
-        'observacao' => trim($_POST['observacao'] ?? ''),
+        'cliente_id'      => (int)($_POST['cliente_id'] ?? 0),
+        'status'          => $editando ? 'ABERTO' : (string)($_POST['status'] ?? 'ABERTO'),
+        'observacao'      => trim((string)($_POST['observacao'] ?? '')),
+        'desconto'        => trim((string)($_POST['desconto'] ?? '')),
+        'forma_pagamento' => (string)($_POST['forma_pagamento'] ?? ''),
     ];
 
     // Junta as linhas do formulário; o mesmo produto em 2 linhas vira 1 item com a soma
@@ -56,36 +109,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!isset($statusNovos[$valores['status']])) {
         $erros['status'] = 'Status inválido.';
     }
+    if ($valores['forma_pagamento'] !== '' && !isset(formas_pagamento()[$valores['forma_pagamento']])) {
+        $erros['forma_pagamento'] = 'Forma de pagamento inválida.';
+    }
+    $desconto = $valores['desconto'] === '' ? 0.0 : converter_moeda($valores['desconto']);
+    if ($desconto === null || $desconto > VALOR_MAXIMO) {
+        $erros['desconto'] = 'Informe um desconto válido, por exemplo 50,00.';
+    }
     if (!$itens && !isset($erros['itens'])) {
         $erros['itens'] = 'Adicione pelo menos um produto ao pedido.';
+    }
+
+    // O desconto não pode passar do valor dos itens (preço já gravado ou preço atual)
+    if (!$erros) {
+        $precosAtuais = array_map('floatval', array_column($produtos, 'PRECO', 'ID'));
+        $subtotal = 0.0;
+        foreach ($itens as $produtoId => $qtd) {
+            $subtotal += $qtd * ($precosAntes[$produtoId] ?? $precosAtuais[$produtoId] ?? 0);
+        }
+        if ($desconto > $subtotal) {
+            $erros['desconto'] = 'O desconto (' . moeda($desconto) . ') não pode ser maior que o valor dos itens (' . moeda($subtotal) . ').';
+        }
     }
 
     if (!$erros) {
         $pdo->beginTransaction();
         try {
-            $stmt = $pdo->prepare('INSERT INTO pedidos (CLIENTE_ID, USUARIO_ID, STATUS, OBSERVACAO) VALUES (?, ?, ?, ?)');
-            $stmt->execute([$valores['cliente_id'], $_SESSION['usuario_id'], $valores['status'], $valores['observacao'] ?: null]);
-            $pedidoId = (int)$pdo->lastInsertId();
+            $dadosPedido = [$valores['cliente_id'], $valores['observacao'] ?: null, $desconto, $valores['forma_pagamento'] ?: null];
 
-            // O preço unitário é copiado de produtos: se o preço mudar depois, o pedido não muda
-            $item = $pdo->prepare(
+            if ($editando) {
+                // Trava o pedido e confere de novo: alguém pode ter mudado o status nesse meio-tempo
+                $stmt = $pdo->prepare('SELECT STATUS FROM pedidos WHERE ID = ? FOR UPDATE');
+                $stmt->execute([$id]);
+                if ($stmt->fetchColumn() !== 'ABERTO') {
+                    throw new RuntimeException('Este pedido não está mais em aberto e não pode ser editado.');
+                }
+                $pdo->prepare('UPDATE pedidos SET CLIENTE_ID = ?, OBSERVACAO = ?, DESCONTO = ?, FORMA_PAGAMENTO = ? WHERE ID = ?')
+                    ->execute([...$dadosPedido, $id]);
+                $pdo->prepare('DELETE FROM itens_pedido WHERE PEDIDO_ID = ?')->execute([$id]);
+                $pedidoId = $id;
+            } else {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO pedidos (CLIENTE_ID, OBSERVACAO, DESCONTO, FORMA_PAGAMENTO, USUARIO_ID, STATUS) VALUES (?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([...$dadosPedido, $_SESSION['usuario_id'], $valores['status']]);
+                $pedidoId = (int)$pdo->lastInsertId();
+            }
+
+            // Produto que já estava no pedido mantém o preço da venda original;
+            // produto novo usa o preço atual (copiado de produtos — se o preço mudar depois, o pedido não muda)
+            $itemComPreco = $pdo->prepare('INSERT INTO itens_pedido (PEDIDO_ID, PRODUTO_ID, QUANTIDADE, PRECO_UNITARIO) VALUES (?, ?, ?, ?)');
+            $itemPrecoAtual = $pdo->prepare(
                 'INSERT INTO itens_pedido (PEDIDO_ID, PRODUTO_ID, QUANTIDADE, PRECO_UNITARIO)
                  SELECT ?, ID, ?, PRECO FROM produtos WHERE ID = ?'
             );
             foreach ($itens as $produtoId => $qtd) {
-                $item->execute([$pedidoId, $qtd, $produtoId]);
-                if ($item->rowCount() === 0) {
-                    throw new RuntimeException('Um dos produtos escolhidos não existe mais.');
+                if (isset($precosAntes[$produtoId])) {
+                    $itemComPreco->execute([$pedidoId, $produtoId, $qtd, $precosAntes[$produtoId]]);
+                } else {
+                    $itemPrecoAtual->execute([$pedidoId, $qtd, $produtoId]);
+                    if ($itemPrecoAtual->rowCount() === 0) {
+                        throw new RuntimeException('Um dos produtos escolhidos não existe mais.');
+                    }
                 }
             }
 
-            $faltando = baixar_estoque($pdo, $pedidoId);
+            $faltando = $editando
+                ? ajustar_estoque_pedido($pdo, $pedidoId, $itensAntes, $itens)
+                : baixar_estoque($pdo, $pedidoId, "Pedido #$pedidoId");
             if ($faltando) {
                 throw new RuntimeException('Estoque insuficiente para: ' . implode(', ', $faltando) . '.');
             }
 
             $pdo->commit();
-            flash('success', "Pedido #$pedidoId registrado com sucesso!");
+            registrar_atividade($pdo, $editando ? 'ALTEROU' : 'CRIOU',
+                ($editando ? 'Editou' : 'Registrou') . " o pedido #$pedidoId", 'pedido', $pedidoId);
+            flash('success', $editando ? "Pedido #$pedidoId atualizado!" : "Pedido #$pedidoId registrado com sucesso!");
             header('Location: pedido_ver.php?id=' . $pedidoId);
             exit;
         } catch (RuntimeException $e) {
@@ -97,22 +196,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$titulo = $editando ? "Editar Pedido #$id" : 'Novo Pedido';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Novo Pedido</title>
+    <title><?php echo $titulo; ?></title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="container">
-        <?php $breadcrumb = ['Pedidos' => 'pedidos.php', 'Novo Pedido' => null]; include __DIR__ . '/header.php'; ?>
+        <?php
+        $breadcrumb = $editando
+            ? ['Pedidos' => 'pedidos.php', "Pedido #$id" => "pedido_ver.php?id=$id", 'Editar' => null]
+            : ['Pedidos' => 'pedidos.php', 'Novo Pedido' => null];
+        include __DIR__ . '/header.php';
+        ?>
 
         <main>
             <div class="form-container">
-                <h2 class="page-title"><?php echo icone('carrinho'); ?> Novo Pedido</h2>
+                <h2 class="page-title"><?php echo icone($editando ? 'editar' : 'carrinho'); ?> <?php echo $titulo; ?></h2>
 
                 <?php if (!$clientes || !$produtos): ?>
                     <div class="alert alert-warning" role="alert">
@@ -126,6 +232,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 <?php else: ?>
 
+                <?php if ($editando): ?>
+                    <div class="alert alert-info">
+                        <?php echo icone('alerta'); ?>
+                        <span>Produtos que já estavam no pedido mantêm o preço da venda original. O estoque é ajustado só pela diferença.</span>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ($erros): ?>
                     <div class="alert alert-error" role="alert">
                         <?php echo icone('erro'); ?>
@@ -133,7 +246,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 <?php endif; ?>
 
-                <form method="POST" action="pedido_novo.php" id="formPedido" novalidate>
+                <form method="POST" action="" id="formPedido" novalidate>
+                    <?php echo csrf_campo(); ?>
                     <div class="form-grid">
                         <div class="form-group<?php echo isset($erros['cliente_id']) ? ' has-error' : ''; ?>">
                             <label for="cliente_id">Cliente <span class="required" aria-hidden="true">*</span></label>
@@ -148,14 +262,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['cliente_id'] ?? ''); ?></span></small>
                         </div>
 
-                        <div class="form-group<?php echo isset($erros['status']) ? ' has-error' : ''; ?>">
-                            <label for="status">Status</label>
-                            <select id="status" name="status">
-                                <?php foreach ($statusNovos as $valor => $rotulo): ?>
-                                    <option value="<?php echo $valor; ?>" <?php echo $valor === $valores['status'] ? 'selected' : ''; ?>><?php echo $rotulo; ?></option>
+                        <?php if (!$editando): ?>
+                            <div class="form-group<?php echo isset($erros['status']) ? ' has-error' : ''; ?>">
+                                <label for="status">Status</label>
+                                <select id="status" name="status">
+                                    <?php foreach ($statusNovos as $valor => $rotulo): ?>
+                                        <option value="<?php echo $valor; ?>" <?php echo $valor === $valores['status'] ? 'selected' : ''; ?>><?php echo $rotulo; ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['status'] ?? ''); ?></span></small>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="form-group<?php echo isset($erros['forma_pagamento']) ? ' has-error' : ''; ?>">
+                            <label for="forma_pagamento">Forma de pagamento</label>
+                            <select id="forma_pagamento" name="forma_pagamento">
+                                <option value="">Não informada</option>
+                                <?php foreach (formas_pagamento() as $valor => $rotulo): ?>
+                                    <option value="<?php echo $valor; ?>" <?php echo $valor === $valores['forma_pagamento'] ? 'selected' : ''; ?>><?php echo $rotulo; ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['status'] ?? ''); ?></span></small>
+                            <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['forma_pagamento'] ?? ''); ?></span></small>
                         </div>
                     </div>
 
@@ -174,9 +301,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <select name="produto_id[]" aria-label="Produto" data-produto>
                                         <option value="">Selecione o produto…</option>
                                         <?php foreach ($produtos as $p): ?>
-                                            <option value="<?php echo $p['ID']; ?>" data-preco="<?php echo $p['PRECO']; ?>"
-                                                <?php echo (int)$p['ID'] === $linha['produto_id'] ? 'selected' : ''; ?>>
-                                                <?php echo htmlspecialchars($p['NOME']) . ' — ' . moeda((float)$p['PRECO']) . ' (estoque: ' . (int)$p['ESTOQUE'] . ')'; ?>
+                                            <?php
+                                            $pid = (int)$p['ID'];
+                                            // Na edição: preço original e estoque somando o que já está reservado neste pedido
+                                            $preco = $precosAntes[$pid] ?? (float)$p['PRECO'];
+                                            $disponivel = (int)$p['ESTOQUE'] + ($itensAntes[$pid] ?? 0);
+                                            ?>
+                                            <option value="<?php echo $pid; ?>" data-preco="<?php echo $preco; ?>"
+                                                <?php echo $pid === $linha['produto_id'] ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($p['NOME']) . ' — ' . moeda($preco) . ' (disponível: ' . $disponivel . ')'; ?>
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
@@ -191,13 +324,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         <div class="itens-rodape">
                             <button type="button" class="btn btn-outline btn-sm" id="adicionarItem"><?php echo icone('plus'); ?> Adicionar produto</button>
-                            <p class="itens-total">Total: <strong id="totalPedido">R$ 0,00</strong></p>
+                            <div class="itens-resumo">
+                                <div class="form-group desconto-campo<?php echo isset($erros['desconto']) ? ' has-error' : ''; ?>">
+                                    <label for="desconto">Desconto (R$)</label>
+                                    <input type="text" id="desconto" name="desconto" inputmode="numeric" placeholder="0,00"
+                                           data-mascara-moeda autocomplete="off" value="<?php echo htmlspecialchars($valores['desconto']); ?>">
+                                    <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['desconto'] ?? ''); ?></span></small>
+                                </div>
+                                <dl class="itens-totais">
+                                    <div><dt>Subtotal</dt><dd id="subtotalPedido">R$ 0,00</dd></div>
+                                    <div><dt>Desconto</dt><dd id="descontoPedido">− R$ 0,00</dd></div>
+                                    <div class="itens-total"><dt>Total</dt><dd><strong id="totalPedido">R$ 0,00</strong></dd></div>
+                                </dl>
+                            </div>
                         </div>
                     </fieldset>
 
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary"><?php echo icone('salvar'); ?> Registrar Pedido</button>
-                        <a href="pedidos.php" class="btn btn-outline"><?php echo icone('lista'); ?> Ver Pedidos</a>
+                        <button type="submit" class="btn btn-primary"><?php echo icone('salvar'); ?> <?php echo $editando ? 'Salvar Alterações' : 'Registrar Pedido'; ?></button>
+                        <a href="<?php echo $editando ? 'pedido_ver.php?id=' . $id : 'pedidos.php'; ?>" class="btn btn-outline">
+                            <?php echo $editando ? icone('fechar') . ' Cancelar' : icone('lista') . ' Ver Pedidos'; ?></a>
                     </div>
                 </form>
                 <?php endif; ?>
@@ -207,6 +353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php include __DIR__ . '/footer.php'; ?>
     </div>
 
+    <script src="js/moeda.js"></script>
     <script src="js/pedido.js"></script>
 </body>
 </html>

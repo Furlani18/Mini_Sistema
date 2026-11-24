@@ -8,6 +8,9 @@ require_once 'validacao.php';
 //   usuario_cadastro.php         → novo usuário (senha obrigatória)
 //   usuario_cadastro.php?id=ID   → editar (senha em branco = mantém a atual)
 // O próprio usuário logado edita os seus dados em perfil.php (que pede a senha atual).
+// Somente administradores. O sistema nunca fica sem pelo menos um administrador.
+
+exigir_admin();
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($id > 0 && $id === (int)$_SESSION['usuario_id']) {
@@ -17,11 +20,11 @@ if ($id > 0 && $id === (int)$_SESSION['usuario_id']) {
 
 $erros = [];
 $toasts = [];
-$vazio = ['nome' => '', 'email' => '', 'telefone' => ''];
+$vazio = ['nome' => '', 'email' => '', 'telefone' => '', 'perfil' => 'OPERADOR'];
 $valores = $vazio;
 
 if ($id > 0) {
-    $stmt = $pdo->prepare('SELECT NOME, EMAIL, TELEFONE FROM usuarios WHERE ID = ?');
+    $stmt = $pdo->prepare('SELECT NOME, EMAIL, TELEFONE, PERFIL FROM usuarios WHERE ID = ?');
     $stmt->execute([$id]);
     $usuario = $stmt->fetch();
     if (!$usuario) {
@@ -29,7 +32,7 @@ if ($id > 0) {
         header('Location: usuarios.php');
         exit;
     }
-    $valores = ['nome' => $usuario['NOME'], 'email' => $usuario['EMAIL'], 'telefone' => $usuario['TELEFONE'] ?? ''];
+    $valores = ['nome' => $usuario['NOME'], 'email' => $usuario['EMAIL'], 'telefone' => $usuario['TELEFONE'] ?? '', 'perfil' => $usuario['PERFIL']];
 }
 $editando = $id > 0;
 
@@ -38,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'nome'     => trim($_POST['nome'] ?? ''),
         'email'    => trim($_POST['email'] ?? ''),
         'telefone' => trim($_POST['telefone'] ?? ''),
+        'perfil'   => (string)($_POST['perfil'] ?? ''),
     ];
     $senha = trim($_POST['senha'] ?? '');
     $confirmacao = trim($_POST['senha_confirmacao'] ?? '');
@@ -45,21 +49,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $erros = validar_pessoa($valores['nome'], $valores['email'], $valores['telefone'], 'usuário')
         + validar_senha($senha, $confirmacao, !$editando);
 
+    if (!isset(perfis()[$valores['perfil']])) {
+        $erros['perfil'] = 'Escolha o perfil do usuário.';
+    } elseif ($editando && $usuario['PERFIL'] === 'ADMIN' && $valores['perfil'] !== 'ADMIN'
+        && (int)$pdo->query("SELECT COUNT(*) FROM usuarios WHERE PERFIL = 'ADMIN'")->fetchColumn() <= 1) {
+        $erros['perfil'] = 'Este é o único administrador. Promova outro usuário antes de mudar este.';
+    }
+
     if (!$erros) {
-        $dados = [$valores['nome'], $valores['email'], $valores['telefone'] ?: null];
+        $dados = [$valores['nome'], $valores['email'], $valores['telefone'] ?: null, $valores['perfil']];
         try {
             if ($editando) {
-                $sql = 'UPDATE usuarios SET NOME = ?, EMAIL = ?, TELEFONE = ?';
+                $sql = 'UPDATE usuarios SET NOME = ?, EMAIL = ?, TELEFONE = ?, PERFIL = ?';
                 if ($senha !== '') {
                     $sql .= ', SENHA = ?';
                     $dados[] = password_hash($senha, PASSWORD_DEFAULT);
                 }
                 $stmt = $pdo->prepare($sql . ' WHERE ID = ?');
                 $stmt->execute([...$dados, $id]);
+                registrar_atividade($pdo, 'ALTEROU', "Alterou o usuário '{$valores['nome']}'"
+                    . ($senha !== '' ? ' (redefiniu a senha)' : ''), 'usuario', $id);
+                $usuario['PERFIL'] = $valores['perfil'];
                 $toasts[] = ['tipo' => 'success', 'mensagem' => 'Usuário atualizado' . ($senha !== '' ? ' (senha alterada)' : '') . '!'];
             } else {
-                $stmt = $pdo->prepare('INSERT INTO usuarios (NOME, EMAIL, TELEFONE, SENHA) VALUES (?, ?, ?, ?)');
+                $stmt = $pdo->prepare('INSERT INTO usuarios (NOME, EMAIL, TELEFONE, PERFIL, SENHA) VALUES (?, ?, ?, ?, ?)');
                 $stmt->execute([...$dados, password_hash($senha, PASSWORD_DEFAULT)]);
+                registrar_atividade($pdo, 'CRIOU', "Criou o usuário '{$valores['nome']}' (" . perfis()[$valores['perfil']] . ')',
+                    'usuario', (int)$pdo->lastInsertId());
                 flash('success', "Usuário '{$valores['nome']}' criado. Ele já pode entrar com o email e a senha informados.");
                 header('Location: usuarios.php');
                 exit;
@@ -130,8 +146,19 @@ $titulo = $editando ? 'Editar Usuário' : 'Novo Usuário';
                 <?php endif; ?>
 
                 <form method="POST" action="" data-validar data-entidade="usuário" novalidate>
+                    <?php echo csrf_campo(); ?>
                     <div class="form-grid">
                         <?php include __DIR__ . '/form_campos.php'; ?>
+                        <div class="form-group<?php echo isset($erros['perfil']) ? ' has-error' : ''; ?>">
+                            <label for="perfil">Perfil de acesso <span class="required" aria-hidden="true">*</span></label>
+                            <select id="perfil" name="perfil" aria-describedby="perfil-ajuda perfil-erro">
+                                <?php foreach (perfis() as $valor => $rotulo): ?>
+                                    <option value="<?php echo $valor; ?>" <?php echo $valor === $valores['perfil'] ? 'selected' : ''; ?>><?php echo $rotulo; ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="field-help" id="perfil-ajuda">Operador não apaga registros nem gerencia usuários.</small>
+                            <small class="field-error" id="perfil-erro"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['perfil'] ?? ''); ?></span></small>
+                        </div>
                     </div>
 
                     <div class="form-actions">

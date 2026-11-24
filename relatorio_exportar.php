@@ -20,22 +20,22 @@ function numero_csv(float $valor): string
 switch ($tipo) {
     case 'pedidos':
         $stmt = $pdo->prepare(
-            'SELECT p.ID, p.CRIADO_EM, p.STATUS, c.NOME AS CLIENTE, c.EMAIL, u.NOME AS USUARIO, p.OBSERVACAO,
-                    COALESCE(SUM(i.QUANTIDADE), 0) AS ITENS,
-                    COALESCE(SUM(i.QUANTIDADE * i.PRECO_UNITARIO), 0) AS TOTAL
-               FROM pedidos p
+            'SELECT p.ID, p.CRIADO_EM, p.STATUS, c.NOME AS CLIENTE, c.EMAIL, c.CPF_CNPJ, u.NOME AS USUARIO, p.OBSERVACAO,
+                    p.FORMA_PAGAMENTO, p.UNIDADES AS ITENS, p.SUBTOTAL, p.DESCONTO, p.TOTAL
+               FROM vw_pedidos p
               INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
                LEFT JOIN usuarios u ON u.ID = p.USUARIO_ID
-               LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
               WHERE p.CRIADO_EM BETWEEN ? AND ?
-              GROUP BY p.ID, p.CRIADO_EM, p.STATUS, c.NOME, c.EMAIL, u.NOME, p.OBSERVACAO
               ORDER BY p.CRIADO_EM, p.ID'
         );
         $stmt->execute(limites($periodo));
-        $cabecalho = ['Pedido', 'Data', 'Status', 'Cliente', 'Email do cliente', 'Registrado por', 'Observação', 'Itens', 'Total (R$)'];
+        $cabecalho = ['Pedido', 'Data', 'Status', 'Cliente', 'CPF/CNPJ', 'Email do cliente', 'Registrado por', 'Pagamento',
+                      'Observação', 'Itens', 'Subtotal (R$)', 'Desconto (R$)', 'Total (R$)'];
         $linhas = array_map(fn($p) => [
             $p['ID'], date('d/m/Y H:i', strtotime($p['CRIADO_EM'])), status_pedidos()[$p['STATUS']] ?? $p['STATUS'],
-            $p['CLIENTE'], $p['EMAIL'], $p['USUARIO'] ?? '', $p['OBSERVACAO'] ?? '', (int)$p['ITENS'], numero_csv((float)$p['TOTAL']),
+            $p['CLIENTE'], formatar_documento($p['CPF_CNPJ']), $p['EMAIL'], $p['USUARIO'] ?? '',
+            $p['FORMA_PAGAMENTO'] ? formas_pagamento()[$p['FORMA_PAGAMENTO']] : '', $p['OBSERVACAO'] ?? '', (int)$p['ITENS'],
+            numero_csv((float)$p['SUBTOTAL']), numero_csv((float)$p['DESCONTO']), numero_csv((float)$p['TOTAL']),
         ], $stmt->fetchAll());
         break;
 

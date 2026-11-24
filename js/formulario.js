@@ -31,6 +31,17 @@ const regras = {
     }
     return "";
   },
+  cpf_cnpj: function (valor) {
+    const d = valor.replace(/\D/g, "");
+    if (valor === "") return "";
+    if (d.length === 11) return cpfValido(d) ? "" : "CPF inválido. Confira os números.";
+    if (d.length === 14) return cnpjValido(d) ? "" : "CNPJ inválido. Confira os números.";
+    return "Digite um CPF (11 dígitos) ou CNPJ (14 dígitos).";
+  },
+  cep: function (valor) {
+    if (valor !== "" && valor.replace(/\D/g, "").length !== 8) return "O CEP deve ter 8 dígitos.";
+    return "";
+  },
   // Na edição a senha é opcional (campo sem "required"): em branco = não trocar
   senha: function (valor, input) {
     if (valor === "" && !input.required) return "";
@@ -120,4 +131,25 @@ function formatarTelefone(valor) {
     return "(" + valor.substring(0, 2) + ") " + valor.substring(2);
   }
   return valor;
+}
+
+// Dígitos verificadores (mesmas regras de cpf_valido() e cnpj_valido() no validacao.php)
+function cpfValido(d) {
+  if (/^(\d)\1{10}$/.test(d)) return false;
+  for (let t = 9; t < 11; t++) {
+    let soma = 0;
+    for (let i = 0; i < t; i++) soma += Number(d[i]) * (t + 1 - i);
+    if (Number(d[t]) !== ((10 * soma) % 11) % 10) return false;
+  }
+  return true;
+}
+
+function cnpjValido(d) {
+  if (/^(\d)\1{13}$/.test(d)) return false;
+  const pesos = [[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]];
+  return pesos.every(function (lista, n) {
+    const soma = lista.reduce(function (total, peso, i) { return total + Number(d[i]) * peso; }, 0);
+    const resto = soma % 11;
+    return Number(d[12 + n]) === (resto < 2 ? 0 : 11 - resto);
+  });
 }

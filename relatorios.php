@@ -46,7 +46,8 @@ function variacao(?array $anterior, array $atual, string $campo): ?array
 }
 
 $indicadores = [
-    ['Faturamento', moeda((float)$resumo['FATURAMENTO']), variacao($anterior, $resumo, 'FATURAMENTO'), 'Sem pedidos cancelados'],
+    ['Faturamento', moeda((float)$resumo['FATURAMENTO']), variacao($anterior, $resumo, 'FATURAMENTO'),
+        (float)$resumo['DESCONTOS'] > 0 ? 'Já com ' . moeda((float)$resumo['DESCONTOS']) . ' de descontos' : 'Sem cancelados e descontos'],
     ['Pedidos', (string)(int)$resumo['PEDIDOS'], variacao($anterior, $resumo, 'PEDIDOS'),
         (int)$resumo['CANCELADOS'] === 1 ? '1 cancelado à parte' : (int)$resumo['CANCELADOS'] . ' cancelados à parte'],
     ['Ticket médio', moeda((float)$resumo['TICKET']), variacao($anterior, $resumo, 'TICKET'), 'Valor médio por pedido'],

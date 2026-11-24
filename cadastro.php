@@ -4,23 +4,34 @@ require_once 'conexao.php';
 require_once 'ui.php';
 require_once 'validacao.php';
 
-$valores = ['nome' => '', 'email' => '', 'telefone' => ''];
+// Cadastro de cliente: dados principais, documento, endereço e observações.
+
+$valores = cliente_vazio();
 $erros = [];
 $toasts = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $valores = [
-        'nome'     => trim($_POST['nome'] ?? ''),
-        'email'    => trim($_POST['email'] ?? ''),
-        'telefone' => trim($_POST['telefone'] ?? ''),
-    ];
-    $erros = validar_cliente($valores['nome'], $valores['email'], $valores['telefone']);
+    $valores = cliente_do_post();
+    $erros = validar_cliente_completo($valores);
 
     if (!$erros) {
-        $stmt = $pdo->prepare('INSERT INTO clientes (NOME, EMAIL, TELEFONE) VALUES (?, ?, ?)');
-        $stmt->execute([$valores['nome'], $valores['email'], $valores['telefone']]);
-        $toasts[] = ['tipo' => 'success', 'mensagem' => "Cliente '{$valores['nome']}' cadastrado com sucesso!"];
-        $valores = ['nome' => '', 'email' => '', 'telefone' => ''];
+        try {
+            $stmt = $pdo->prepare(
+                'INSERT INTO clientes (NOME, EMAIL, TELEFONE, CPF_CNPJ, CEP, LOGRADOURO, NUMERO, COMPLEMENTO, BAIRRO, CIDADE, UF, OBSERVACOES)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->execute(cliente_para_banco($valores));
+            $novoId = (int)$pdo->lastInsertId();
+            registrar_atividade($pdo, 'CRIOU', "Cadastrou o cliente '{$valores['nome']}'", 'cliente', $novoId);
+            flash('success', "Cliente '{$valores['nome']}' cadastrado com sucesso!");
+            header('Location: cliente_ver.php?id=' . $novoId);
+            exit;
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+            $erros['cpf_cnpj'] = 'Já existe um cliente com esse CPF/CNPJ.';
+        }
     }
 }
 ?>
@@ -39,7 +50,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <main>
             <div class="form-container">
-                <h2 class="page-title"><?php echo icone('usuario-mais'); ?> Cadastrar Novo Cliente</h2>
+                <div class="list-header">
+                    <h2 class="page-title"><?php echo icone('usuario-mais'); ?> Cadastrar Novo Cliente</h2>
+                    <a href="cliente_importar.php" class="btn btn-outline"><?php echo icone('upload'); ?> Importar planilha</a>
+                </div>
 
                 <?php if ($erros): ?>
                     <div class="alert alert-error" role="alert">
@@ -49,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endif; ?>
 
                 <form method="POST" action="" id="formCadastro" data-validar novalidate>
+                    <?php echo csrf_campo(); ?>
                     <?php include __DIR__ . '/form_cliente.php'; ?>
 
                     <div class="form-actions">
@@ -63,5 +78,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script src="js/formulario.js"></script>
+    <script src="js/endereco.js"></script>
 </body>
 </html>

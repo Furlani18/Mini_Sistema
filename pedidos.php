@@ -7,7 +7,7 @@ require_once 'lista.php';
 // Lista de pedidos. Junta 4 tabelas:
 //   pedidos  ⨝ clientes      (quem comprou)          INNER JOIN — todo pedido tem cliente
 //            ⨝ usuarios      (quem registrou)        LEFT JOIN  — pode ser NULL
-//            ⨝ itens_pedido  (para somar o total)    LEFT JOIN  — pedido pode estar sem itens
+// Os totais vêm da visão vw_pedidos (itens somados, menos o desconto) — ver melhorias.sql.
 // Filtros (todos opcionais, combináveis):
 //   ?q=texto  ?status=PAGO  ?de=2026-01-01  ?ate=2026-12-31  ?cliente=ID (link vindo da lista de clientes)
 // Ordenação por coluna e paginação ficam no lista.php.
@@ -60,17 +60,16 @@ $ordem = ordenacao([
     'data'    => 'p.CRIADO_EM',
     'cliente' => 'c.NOME',
     'status'  => 'p.STATUS',
-    'itens'   => 'ITENS',
-    'total'   => 'TOTAL',
+    'itens'   => 'p.ITENS',
+    'total'   => 'p.TOTAL',
 ], 'id', 'desc');
 
 // Quantidade e total vendido de TODOS os pedidos filtrados (não só da página atual)
 $stmt = $pdo->prepare(
-    "SELECT COUNT(DISTINCT p.ID) AS QTD,
-            COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN i.QUANTIDADE * i.PRECO_UNITARIO END), 0) AS VENDIDO
-       FROM pedidos p
+    "SELECT COUNT(*) AS QTD,
+            COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.TOTAL END), 0) AS VENDIDO
+       FROM vw_pedidos p
       INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
-       LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
        $where"
 );
 $stmt->execute($parametros);
@@ -78,17 +77,13 @@ $resumo = $stmt->fetch();
 $pag = paginacao((int)$resumo['QTD']);
 
 $stmt = $pdo->prepare(
-    "SELECT p.ID, p.STATUS, p.CRIADO_EM,
+    "SELECT p.ID, p.STATUS, p.CRIADO_EM, p.ITENS, p.TOTAL, p.DESCONTO,
             c.ID AS CLIENTE_ID, c.NOME AS CLIENTE,
-            u.NOME AS USUARIO,
-            COUNT(i.ID) AS ITENS,
-            COALESCE(SUM(i.QUANTIDADE * i.PRECO_UNITARIO), 0) AS TOTAL
-       FROM pedidos p
+            u.NOME AS USUARIO
+       FROM vw_pedidos p
       INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
        LEFT JOIN usuarios u ON u.ID = p.USUARIO_ID
-       LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
        $where
-      GROUP BY p.ID, p.STATUS, p.CRIADO_EM, c.ID, c.NOME, u.NOME
       ORDER BY {$ordem['sql']}, p.ID DESC
       LIMIT {$pag['limite']} OFFSET {$pag['offset']}"
 );
@@ -204,9 +199,15 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                                                 <div class="action-buttons">
                                                     <a href="pedido_ver.php?id=<?php echo $p['ID']; ?>" class="btn-icon" title="Ver detalhes"
                                                        aria-label="Ver pedido #<?php echo $p['ID']; ?>"><?php echo icone('olho'); ?></a>
-                                                    <a href="pedido_apagar.php?id=<?php echo $p['ID']; ?>" class="btn-icon btn-icon-danger" title="Apagar"
-                                                       aria-label="Apagar pedido #<?php echo $p['ID']; ?>"
-                                                       data-confirmar-exclusao="o pedido #<?php echo $p['ID']; ?>"><?php echo icone('lixeira'); ?></a>
+                                                    <?php if ($p['STATUS'] === 'ABERTO'): ?>
+                                                        <a href="pedido_novo.php?id=<?php echo $p['ID']; ?>" class="btn-icon" title="Editar"
+                                                           aria-label="Editar pedido #<?php echo $p['ID']; ?>"><?php echo icone('editar'); ?></a>
+                                                    <?php endif; ?>
+                                                    <?php if (eh_admin()): ?>
+                                                        <a href="pedido_apagar.php?id=<?php echo $p['ID']; ?>" class="btn-icon btn-icon-danger" title="Apagar"
+                                                           aria-label="Apagar pedido #<?php echo $p['ID']; ?>"
+                                                           data-confirmar-exclusao="o pedido #<?php echo $p['ID']; ?>"><?php echo icone('lixeira'); ?></a>
+                                                    <?php endif; ?>
                                                 </div>
                                             </td>
                                         </tr>

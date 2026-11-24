@@ -6,14 +6,15 @@ require_once 'estoque.php';
 
 // Detalhes de um pedido: dados do pedido + cliente + usuário (JOINs) e a lista
 // de itens com os produtos (itens_pedido ⨝ produtos). Também permite mudar o status.
+// Os totais vêm da visão vw_pedidos (SUBTOTAL - DESCONTO = TOTAL).
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 $buscarPedido = $pdo->prepare(
-    'SELECT p.ID, p.STATUS, p.OBSERVACAO, p.CRIADO_EM,
+    'SELECT p.ID, p.STATUS, p.OBSERVACAO, p.CRIADO_EM, p.DESCONTO, p.FORMA_PAGAMENTO, p.SUBTOTAL, p.TOTAL,
             c.ID AS CLIENTE_ID, c.NOME AS CLIENTE, c.EMAIL AS CLIENTE_EMAIL, c.TELEFONE AS CLIENTE_TELEFONE,
             u.NOME AS USUARIO
-       FROM pedidos p
+       FROM vw_pedidos p
       INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
        LEFT JOIN usuarios u ON u.ID = p.USUARIO_ID
       WHERE p.ID = ?'
@@ -38,9 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         $faltando = [];
         if ($novo === 'CANCELADO') {
-            devolver_estoque($pdo, $id);
+            devolver_estoque($pdo, $id, "Pedido #$id cancelado");
         } elseif ($atual === 'CANCELADO') {
-            $faltando = baixar_estoque($pdo, $id);
+            $faltando = baixar_estoque($pdo, $id, "Pedido #$id reaberto");
         }
 
         if ($faltando) {
@@ -49,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $pdo->prepare('UPDATE pedidos SET STATUS = ? WHERE ID = ?')->execute([$novo, $id]);
             $pdo->commit();
+            registrar_atividade($pdo, 'ALTEROU', "Pedido #$id: status de " . status_pedidos()[$atual] . ' para ' . status_pedidos()[$novo], 'pedido', $id);
             flash('success', 'Status alterado para "' . status_pedidos()[$novo] . '".');
         }
     }
@@ -66,7 +68,6 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute([$id]);
 $itens = $stmt->fetchAll();
-$total = array_sum(array_column($itens, 'SUBTOTAL'));
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -84,6 +85,12 @@ $total = array_sum(array_column($itens, 'SUBTOTAL'));
             <div class="list-container">
                 <div class="list-header">
                     <h2 class="page-title"><?php echo icone('carrinho'); ?> Pedido <span class="page-title-id">#<?php echo $pedido['ID']; ?></span> <?php echo badge_status($pedido['STATUS']); ?></h2>
+                    <div class="page-head-acoes">
+                        <a href="pedido_imprimir.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-outline" target="_blank" rel="noopener"><?php echo icone('impressora'); ?> Imprimir / PDF</a>
+                        <?php if ($pedido['STATUS'] === 'ABERTO'): ?>
+                            <a href="pedido_novo.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-primary"><?php echo icone('editar'); ?> Editar Pedido</a>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <dl class="detalhes">
@@ -101,6 +108,10 @@ $total = array_sum(array_column($itens, 'SUBTOTAL'));
                     <div>
                         <dt>Data</dt>
                         <dd><?php echo date('d/m/Y H:i', strtotime($pedido['CRIADO_EM'])); ?></dd>
+                    </div>
+                    <div>
+                        <dt>Pagamento</dt>
+                        <dd><?php echo $pedido['FORMA_PAGAMENTO'] ? formas_pagamento()[$pedido['FORMA_PAGAMENTO']] : '<span class="text-muted">Não informado</span>'; ?></dd>
                     </div>
                     <div>
                         <dt>Observação</dt>
@@ -136,15 +147,26 @@ $total = array_sum(array_column($itens, 'SUBTOTAL'));
                             <?php endif; ?>
                         </tbody>
                         <tfoot>
+                            <?php if ((float)$pedido['DESCONTO'] > 0): ?>
+                                <tr class="tfoot-secundario">
+                                    <th colspan="3" class="num">Subtotal</th>
+                                    <th class="num"><?php echo moeda((float)$pedido['SUBTOTAL']); ?></th>
+                                </tr>
+                                <tr class="tfoot-secundario">
+                                    <th colspan="3" class="num">Desconto</th>
+                                    <th class="num">− <?php echo moeda((float)$pedido['DESCONTO']); ?></th>
+                                </tr>
+                            <?php endif; ?>
                             <tr>
                                 <th colspan="3" class="num">Total</th>
-                                <th class="num total-valor"><?php echo moeda((float)$total); ?></th>
+                                <th class="num total-valor"><?php echo moeda((float)$pedido['TOTAL']); ?></th>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
 
                 <form method="POST" action="pedido_ver.php?id=<?php echo $pedido['ID']; ?>" class="status-form">
+                    <?php echo csrf_campo(); ?>
                     <label for="status">Alterar status:</label>
                     <select id="status" name="status">
                         <?php foreach (status_pedidos() as $valor => $rotulo): ?>
@@ -156,8 +178,10 @@ $total = array_sum(array_column($itens, 'SUBTOTAL'));
 
                 <div class="form-actions">
                     <a href="pedidos.php" class="btn btn-outline"><?php echo icone('lista'); ?> Ver Pedidos</a>
-                    <a href="pedido_apagar.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-danger-outline"
-                       data-confirmar-exclusao="o pedido #<?php echo $pedido['ID']; ?>"><?php echo icone('lixeira'); ?> Apagar Pedido</a>
+                    <?php if (eh_admin()): ?>
+                        <a href="pedido_apagar.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-danger-outline"
+                           data-confirmar-exclusao="o pedido #<?php echo $pedido['ID']; ?>"><?php echo icone('lixeira'); ?> Apagar Pedido</a>
+                    <?php endif; ?>
                 </div>
             </div>
         </main>

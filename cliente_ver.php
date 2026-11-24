@@ -9,7 +9,7 @@ require_once 'ui.php';
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-$stmt = $pdo->prepare('SELECT ID, NOME, EMAIL, TELEFONE, CRIADO_EM FROM clientes WHERE ID = ?');
+$stmt = $pdo->prepare('SELECT * FROM clientes WHERE ID = ?');
 $stmt->execute([$id]);
 $cliente = $stmt->fetch();
 
@@ -21,13 +21,9 @@ if (!$cliente) {
 
 // Histórico de pedidos (todos, inclusive cancelados) com o total de cada um
 $stmt = $pdo->prepare(
-    'SELECT p.ID, p.STATUS, p.CRIADO_EM, p.OBSERVACAO,
-            COUNT(i.ID) AS ITENS,
-            COALESCE(SUM(i.QUANTIDADE * i.PRECO_UNITARIO), 0) AS TOTAL
-       FROM pedidos p
-       LEFT JOIN itens_pedido i ON i.PEDIDO_ID = p.ID
+    'SELECT p.ID, p.STATUS, p.CRIADO_EM, p.OBSERVACAO, p.ITENS, p.TOTAL
+       FROM vw_pedidos p
       WHERE p.CLIENTE_ID = ?
-      GROUP BY p.ID, p.STATUS, p.CRIADO_EM, p.OBSERVACAO
       ORDER BY p.CRIADO_EM DESC, p.ID DESC'
 );
 $stmt->execute([$id]);
@@ -103,14 +99,31 @@ $indicadores = [
                         <?php if ($cliente['TELEFONE']): ?>
                             <li><?php echo icone('telefone'); ?> <?php echo htmlspecialchars($cliente['TELEFONE']); ?></li>
                         <?php endif; ?>
+                        <?php if ($cliente['CPF_CNPJ']): ?>
+                            <li><?php echo icone('documento'); ?> <?php echo strlen($cliente['CPF_CNPJ']) === 14 ? 'CNPJ' : 'CPF'; ?> <?php echo formatar_documento($cliente['CPF_CNPJ']); ?></li>
+                        <?php endif; ?>
                         <li><?php echo icone('calendario'); ?> Cliente desde <?php echo date('d/m/Y', strtotime($cliente['CRIADO_EM'])); ?></li>
                     </ul>
+                    <?php $endereco = endereco_cliente($cliente); ?>
+                    <?php if ($endereco): ?>
+                        <p class="perfil-endereco"><?php echo icone('mapa'); ?> <?php echo htmlspecialchars($endereco); ?></p>
+                    <?php endif; ?>
                 </div>
                 <div class="page-head-acoes">
                     <a href="atualizar.php?id=<?php echo $cliente['ID']; ?>" class="btn btn-outline"><?php echo icone('editar'); ?> Editar</a>
                     <a href="pedido_novo.php?cliente=<?php echo $cliente['ID']; ?>" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Pedido</a>
                 </div>
             </section>
+
+            <?php if ($cliente['OBSERVACOES']): ?>
+                <div class="nota-cliente">
+                    <?php echo icone('nota'); ?>
+                    <div>
+                        <strong>Observações</strong>
+                        <p><?php echo nl2br(htmlspecialchars($cliente['OBSERVACOES'])); ?></p>
+                    </div>
+                </div>
+            <?php endif; ?>
 
             <section class="indicadores" aria-label="Indicadores do cliente">
                 <?php foreach ($indicadores as [$rotulo, $valor, $detalhe]): ?>
@@ -179,8 +192,10 @@ $indicadores = [
 
             <div class="form-actions form-actions-solta">
                 <a href="clientes.php" class="btn btn-outline"><?php echo icone('lista'); ?> Ver Clientes</a>
+                <?php if (eh_admin()): ?>
                 <a href="apagar.php?id=<?php echo $cliente['ID']; ?>" class="btn btn-danger-outline"
                    data-confirmar-exclusao="<?php echo $nome; ?>"><?php echo icone('lixeira'); ?> Apagar Cliente</a>
+                <?php endif; ?>
             </div>
         </main>
 

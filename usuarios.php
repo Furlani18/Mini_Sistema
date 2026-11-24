@@ -6,6 +6,9 @@ require_once 'lista.php';
 
 // Lista de usuários do sistema (quem faz login), com busca, ordenação e paginação.
 // LEFT JOIN com pedidos para mostrar quantos pedidos cada usuário registrou.
+// Somente administradores.
+
+exigir_admin();
 
 $q = busca_da_url();
 $where = '';
@@ -18,6 +21,7 @@ if ($q !== '') {
 $ordem = ordenacao([
     'nome'    => 'u.NOME',
     'email'   => 'u.EMAIL',
+    'perfil'  => 'u.PERFIL',
     'pedidos' => 'PEDIDOS',
     'criado'  => 'u.CRIADO_EM',
 ], 'nome');
@@ -27,11 +31,11 @@ $stmt->execute($parametros);
 $pag = paginacao((int)$stmt->fetchColumn());
 
 $stmt = $pdo->prepare(
-    "SELECT u.ID, u.NOME, u.EMAIL, u.TELEFONE, u.CRIADO_EM, COUNT(p.ID) AS PEDIDOS
+    "SELECT u.ID, u.NOME, u.EMAIL, u.TELEFONE, u.PERFIL, u.CRIADO_EM, COUNT(p.ID) AS PEDIDOS
        FROM usuarios u
        LEFT JOIN pedidos p ON p.USUARIO_ID = u.ID
        $where
-      GROUP BY u.ID, u.NOME, u.EMAIL, u.TELEFONE, u.CRIADO_EM
+      GROUP BY u.ID, u.NOME, u.EMAIL, u.TELEFONE, u.PERFIL, u.CRIADO_EM
       ORDER BY {$ordem['sql']}, u.ID
       LIMIT {$pag['limite']} OFFSET {$pag['offset']}"
 );
@@ -59,7 +63,9 @@ $meuId = (int)$_SESSION['usuario_id'];
                     <a href="usuario_cadastro.php" class="btn btn-primary"><?php echo icone('usuario-mais'); ?> Novo Usuário</a>
                 </div>
 
-                <p class="intro">Usuários são as pessoas que acessam o sistema com email e senha. Cada pedido guarda quem o registrou.</p>
+                <p class="intro">Usuários são as pessoas que acessam o sistema com email e senha. Cada pedido guarda quem o registrou.
+                    <strong>Administradores</strong> fazem tudo; <strong>operadores</strong> cadastram e editam clientes, produtos e pedidos,
+                    mas não apagam registros nem gerenciam usuários.</p>
 
                 <form method="get" class="filtros" role="search">
                     <?php echo campos_ocultos(['q', 'pagina']); ?>
@@ -84,7 +90,7 @@ $meuId = (int)$_SESSION['usuario_id'];
                                 <tr>
                                     <?php echo th_ordenavel('nome', 'Usuário', $ordem); ?>
                                     <?php echo th_ordenavel('email', 'Email', $ordem); ?>
-                                    <th>Telefone</th>
+                                    <?php echo th_ordenavel('perfil', 'Perfil', $ordem); ?>
                                     <?php echo th_ordenavel('pedidos', 'Pedidos registrados', $ordem, 'num', 'desc'); ?>
                                     <?php echo th_ordenavel('criado', 'Criado em', $ordem, '', 'desc'); ?>
                                     <th class="col-actions"><span class="visually-hidden">Ações</span></th>
@@ -105,7 +111,7 @@ $meuId = (int)$_SESSION['usuario_id'];
                                             </div>
                                         </td>
                                         <td data-label="Email"><?php echo htmlspecialchars($u['EMAIL']); ?></td>
-                                        <td data-label="Telefone"><?php echo $u['TELEFONE'] ? htmlspecialchars($u['TELEFONE']) : '<span class="text-muted">—</span>'; ?></td>
+                                        <td data-label="Perfil"><span class="badge badge-perfil-<?php echo strtolower($u['PERFIL']); ?>"><?php echo perfis()[$u['PERFIL']]; ?></span></td>
                                         <td class="num" data-label="Pedidos registrados"><?php echo (int)$u['PEDIDOS']; ?></td>
                                         <td data-label="Criado em"><?php echo date('d/m/Y', strtotime($u['CRIADO_EM'])); ?></td>
                                         <td class="col-actions">

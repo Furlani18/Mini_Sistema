@@ -4,11 +4,13 @@ require_once 'conexao.php';
 require_once 'ui.php';
 require_once 'validacao.php';
 
+// Atualização de cliente: mesmos campos do cadastro (form_cliente.php).
+
 $erros = [];
 $toasts = [];
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-$stmt = $pdo->prepare('SELECT ID AS id, NOME AS nome, EMAIL AS email, TELEFONE AS telefone FROM clientes WHERE ID = ?');
+$stmt = $pdo->prepare('SELECT * FROM clientes WHERE ID = ?');
 $stmt->execute([$id]);
 $cliente = $stmt->fetch();
 
@@ -19,26 +21,30 @@ if (!$cliente) {
     exit;
 }
 
-$valores = [
-    'nome'     => $cliente['nome'],
-    'email'    => $cliente['email'],
-    'telefone' => $cliente['telefone'] ?? '',
-];
+$valores = cliente_do_banco($cliente);
 
-// Processar atualização
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $valores = [
-        'nome'     => trim($_POST['nome'] ?? ''),
-        'email'    => trim($_POST['email'] ?? ''),
-        'telefone' => trim($_POST['telefone'] ?? ''),
-    ];
-    $erros = validar_cliente($valores['nome'], $valores['email'], $valores['telefone']);
+    $valores = cliente_do_post();
+    $erros = validar_cliente_completo($valores);
 
     if (!$erros) {
-        $stmt = $pdo->prepare('UPDATE clientes SET NOME = ?, EMAIL = ?, TELEFONE = ? WHERE ID = ?');
-        $stmt->execute([$valores['nome'], $valores['email'], $valores['telefone'], $id]);
-        $cliente['nome'] = $valores['nome'];
-        $toasts[] = ['tipo' => 'success', 'mensagem' => 'Cliente atualizado com sucesso!'];
+        try {
+            $stmt = $pdo->prepare(
+                'UPDATE clientes
+                    SET NOME = ?, EMAIL = ?, TELEFONE = ?, CPF_CNPJ = ?, CEP = ?, LOGRADOURO = ?, NUMERO = ?,
+                        COMPLEMENTO = ?, BAIRRO = ?, CIDADE = ?, UF = ?, OBSERVACOES = ?
+                  WHERE ID = ?'
+            );
+            $stmt->execute([...cliente_para_banco($valores), $id]);
+            registrar_atividade($pdo, 'ALTEROU', "Alterou o cliente '{$valores['nome']}'", 'cliente', $id);
+            $cliente['NOME'] = $valores['nome'];
+            $toasts[] = ['tipo' => 'success', 'mensagem' => 'Cliente atualizado com sucesso!'];
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '23000') {
+                throw $e;
+            }
+            $erros['cpf_cnpj'] = 'Já existe outro cliente com esse CPF/CNPJ.';
+        }
     }
 }
 ?>
@@ -53,11 +59,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
     <div class="container">
-        <?php $breadcrumb = ['Clientes' => 'clientes.php', 'Atualizar Cliente' => null]; include __DIR__ . '/header.php'; ?>
+        <?php $breadcrumb = ['Clientes' => 'clientes.php', $cliente['NOME'] => 'cliente_ver.php?id=' . $id, 'Editar' => null]; include __DIR__ . '/header.php'; ?>
 
         <main>
             <div class="form-container">
-                <h2 class="page-title"><?php echo icone('editar'); ?> Atualizar Cliente <span class="page-title-id">#<?php echo $cliente['id']; ?></span></h2>
+                <h2 class="page-title"><?php echo icone('editar'); ?> Atualizar Cliente <span class="page-title-id">#<?php echo $cliente['ID']; ?></span></h2>
 
                 <?php if ($erros): ?>
                     <div class="alert alert-error" role="alert">
@@ -67,14 +73,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endif; ?>
 
                 <form method="POST" action="" id="formAtualizar" data-validar novalidate>
+                    <?php echo csrf_campo(); ?>
                     <?php include __DIR__ . '/form_cliente.php'; ?>
 
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary"><?php echo icone('salvar'); ?> Salvar Alterações</button>
-                        <a href="clientes.php" class="btn btn-outline"><?php echo icone('lista'); ?> Ver Clientes</a>
-                        <a href="apagar.php?id=<?php echo $cliente['id']; ?>"
-                           class="btn btn-danger-outline"
-                           data-confirmar-exclusao="<?php echo htmlspecialchars($cliente['nome']); ?>"><?php echo icone('lixeira'); ?> Apagar Cliente</a>
+                        <a href="cliente_ver.php?id=<?php echo $cliente['ID']; ?>" class="btn btn-outline"><?php echo icone('olho'); ?> Ver Ficha</a>
+                        <?php if (eh_admin()): ?>
+                            <a href="apagar.php?id=<?php echo $cliente['ID']; ?>"
+                               class="btn btn-danger-outline"
+                               data-confirmar-exclusao="<?php echo htmlspecialchars($cliente['NOME']); ?>"><?php echo icone('lixeira'); ?> Apagar Cliente</a>
+                        <?php endif; ?>
                     </div>
                 </form>
             </div>
@@ -84,5 +93,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script src="js/formulario.js"></script>
+    <script src="js/endereco.js"></script>
 </body>
 </html>

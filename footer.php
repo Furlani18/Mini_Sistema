@@ -6,6 +6,7 @@
 // Mensagens guardadas com flash() (ex.: depois de um redirecionamento) também aparecem.
 
 require_once __DIR__ . '/ui.php';
+require_once __DIR__ . '/seguranca.php';
 
 $toasts = array_merge(flash_pegar(), $toasts ?? []);
 $iconesToast = ['success' => 'sucesso', 'error' => 'erro', 'warning' => 'alerta', 'info' => 'erro'];
@@ -34,7 +35,11 @@ $iconesToast = ['success' => 'sucesso', 'error' => 'erro', 'warning' => 'alerta'
         </p>
         <div class="modal-actions">
             <button type="button" class="btn btn-outline" data-modal-cancelar>Cancelar</button>
-            <a href="#" class="btn btn-danger" data-modal-confirmar><?php echo icone('lixeira'); ?> Apagar</a>
+            <?php // A exclusão é feita por POST com token CSRF; o js/app.js define o "action" com o link clicado ?>
+            <form method="POST" action="" data-modal-form>
+                <?php echo csrf_campo(); ?>
+                <button type="submit" class="btn btn-danger"><?php echo icone('lixeira'); ?> Apagar</button>
+            </form>
         </div>
     </div>
 </dialog>

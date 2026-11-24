@@ -1,10 +1,13 @@
-// Formulário de novo pedido: adicionar/remover linhas de itens e calcular o total.
-// O cálculo aqui é só para exibição; o servidor usa o preço gravado em produtos.
+// Formulário de pedido (novo e edição): adicionar/remover linhas de itens e calcular
+// subtotal, desconto e total. O cálculo aqui é só para exibição; o servidor recalcula tudo.
 
 document.addEventListener("DOMContentLoaded", function () {
   const container = document.getElementById("linhasItens");
   const botaoAdicionar = document.getElementById("adicionarItem");
   const total = document.getElementById("totalPedido");
+  const subtotalEl = document.getElementById("subtotalPedido");
+  const descontoEl = document.getElementById("descontoPedido");
+  const campoDesconto = document.getElementById("desconto");
 
   if (!container || !botaoAdicionar || !total) {
     return;
@@ -35,7 +38,16 @@ document.addEventListener("DOMContentLoaded", function () {
       linha.querySelector("[data-remover-item]").disabled = todas.length === 1;
     });
 
-    total.textContent = formatar.format(soma);
+    // Desconto digitado como "1.234,56"
+    const desconto = campoDesconto
+      ? parseFloat(campoDesconto.value.replace(/\./g, "").replace(",", ".")) || 0
+      : 0;
+    if (subtotalEl) subtotalEl.textContent = formatar.format(soma);
+    if (descontoEl) descontoEl.textContent = "− " + formatar.format(desconto);
+    total.textContent = formatar.format(Math.max(0, soma - desconto));
+    if (campoDesconto) {
+      campoDesconto.closest(".form-group").classList.toggle("has-error", desconto > soma && soma > 0);
+    }
   }
 
   botaoAdicionar.addEventListener("click", function () {
@@ -58,5 +70,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   container.addEventListener("input", atualizar);
   container.addEventListener("change", atualizar);
+  if (campoDesconto) campoDesconto.addEventListener("input", atualizar);
   atualizar();
 });

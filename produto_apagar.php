@@ -5,6 +5,10 @@ require_once 'ui.php';
 
 // Apaga um produto. Se ele já aparece em algum pedido, a chave estrangeira
 // FK_ITENS_PRODUTO (ON DELETE RESTRICT) impede a exclusão — avisamos o usuário.
+// Só por POST (botão do modal) e só administradores.
+
+exigir_post('produtos.php');
+exigir_admin('produtos.php');
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
@@ -24,6 +28,7 @@ if (!$produto) {
     flash('error', "O produto '{$produto['NOME']}' não pode ser apagado: ele aparece em {$produto['USOS']} pedido(s).");
 } else {
     $pdo->prepare('DELETE FROM produtos WHERE ID = ?')->execute([$id]);
+    registrar_atividade($pdo, 'APAGOU', "Apagou o produto '{$produto['NOME']}'", 'produto', $id);
     flash('success', "Produto '{$produto['NOME']}' removido com sucesso!");
 }
 
