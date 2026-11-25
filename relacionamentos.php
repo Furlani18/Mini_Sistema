@@ -76,6 +76,46 @@ SELECT p.ID            AS pedido,
  LIMIT 15;
 SQL;
 $linhasJoin = $pdo->query($sqlJoin)->fetchAll();
+
+// ---------- Todas as tabelas do banco, com as chaves estrangeiras (lidas do information_schema) ----------
+$todasTabelas = $pdo->query(
+    "SELECT TABLE_NAME AS NOME, TABLE_TYPE AS TIPO, TABLE_COMMENT AS COMENTARIO
+       FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+      ORDER BY TABLE_TYPE, TABLE_NAME"
+)->fetchAll();
+$chaves = [];
+foreach ($pdo->query(
+    "SELECT k.TABLE_NAME, k.COLUMN_NAME, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, r.DELETE_RULE
+       FROM information_schema.KEY_COLUMN_USAGE k
+      INNER JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+              ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+      WHERE k.TABLE_SCHEMA = DATABASE() AND k.REFERENCED_TABLE_NAME IS NOT NULL
+      ORDER BY k.TABLE_NAME, k.COLUMN_NAME"
+)->fetchAll() as $fk) {
+    $chaves[$fk['TABLE_NAME']][] = $fk;
+}
+foreach ($todasTabelas as &$t) {
+    // Nome vem do information_schema (não do usuário); crases por segurança
+    $t['LINHAS'] = (int)$pdo->query('SELECT COUNT(*) FROM `' . str_replace('`', '``', $t['NOME']) . '`')->fetchColumn();
+}
+unset($t);
+$funcaoTabela = [
+    'usuarios' => 'Quem usa o sistema (login e perfil)',
+    'clientes' => 'Cadastro de clientes',
+    'produtos' => 'Catálogo, preço, custo e estoque',
+    'pedidos' => 'Pedidos e orçamentos',
+    'itens_pedido' => 'Produtos de cada pedido (N:N)',
+    'categorias' => 'Categorias de produto',
+    'fornecedores' => 'Fornecedores das compras',
+    'movimentos_estoque' => 'Histórico de entradas e saídas',
+    'parcelas' => 'Parcelas a receber dos pedidos',
+    'configuracoes' => 'Ajustes do sistema (ex.: meta)',
+    'lixeira' => 'Cópias de registros apagados',
+    'atividades' => 'Registro de quem fez o quê',
+    'tentativas_login' => 'Senhas erradas (bloqueio)',
+    'vw_pedidos' => 'Visão: totais, desconto e custo de cada pedido',
+];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -93,7 +133,7 @@ $linhasJoin = $pdo->query($sqlJoin)->fetchAll();
             <div class="list-container">
                 <h2 class="page-title"><?php echo icone('banco'); ?> Modelo de dados — 5 tabelas relacionadas</h2>
                 <p class="intro">
-                    O banco <code>mini_sistema</code> tem 5 tabelas. <strong>usuarios</strong> e <strong>clientes</strong> já existiam;
+                    O núcleo do banco <code>mini_sistema</code> são 5 tabelas (as demais estão listadas mais abaixo). <strong>usuarios</strong> e <strong>clientes</strong> já existiam;
                     <strong>produtos</strong>, <strong>pedidos</strong> e <strong>itens_pedido</strong> formam o módulo de vendas e ligam tudo
                     por meio de <strong>chaves estrangeiras (FK)</strong>.
                 </p>
@@ -156,6 +196,43 @@ $linhasJoin = $pdo->query($sqlJoin)->fetchAll();
                                     <td data-label="Chave estrangeira"><code><?php echo $fk; ?></code></td>
                                     <td data-label="Ao apagar"><code><?php echo $regra; ?></code></td>
                                     <td data-label="Significado"><?php echo $descricao; ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="list-container">
+                <div class="list-header">
+                    <h2 class="page-title"><?php echo icone('banco'); ?> Todas as tabelas do banco</h2>
+                    <?php if (eh_admin()): ?>
+                        <form method="POST" action="backup.php" class="form-inline">
+                            <?php echo csrf_campo(); ?>
+                            <button type="submit" class="btn btn-outline"><?php echo icone('download'); ?> Baixar backup (.sql)</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+                <p class="intro">Além das 5 tabelas principais, o sistema tem tabelas de apoio. Esta lista é lida ao vivo do <code>information_schema</code> do MySQL.</p>
+                <div class="table-responsive">
+                    <table class="client-table">
+                        <thead>
+                            <tr><th>Tabela</th><th>Função</th><th class="num">Registros</th><th>Chaves estrangeiras (ao apagar o "pai")</th></tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($todasTabelas as $t): ?>
+                                <tr>
+                                    <td class="cell-client"><span class="client-name"><code><?php echo htmlspecialchars($t['NOME']); ?></code></span>
+                                        <?php if ($t['TIPO'] === 'VIEW'): ?><span class="badge badge-tipo">visão</span><?php endif; ?></td>
+                                    <td data-label="Função"><?php echo htmlspecialchars($funcaoTabela[$t['NOME']] ?? '—'); ?></td>
+                                    <td class="num" data-label="Registros"><?php echo $t['LINHAS']; ?></td>
+                                    <td data-label="Chaves">
+                                        <?php foreach ($chaves[$t['NOME']] ?? [] as $fk): ?>
+                                            <code><?php echo htmlspecialchars($fk['COLUMN_NAME'] . ' → ' . $fk['REFERENCED_TABLE_NAME'] . '.' . $fk['REFERENCED_COLUMN_NAME']); ?></code>
+                                            <small class="text-muted"><?php echo htmlspecialchars($fk['DELETE_RULE']); ?></small><br>
+                                        <?php endforeach; ?>
+                                        <?php if (empty($chaves[$t['NOME']])): ?><span class="text-muted">—</span><?php endif; ?>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>

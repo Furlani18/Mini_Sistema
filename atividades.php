@@ -75,6 +75,8 @@ function link_entidade(?string $entidade, ?int $id): ?string
         'produto' => "produto_estoque.php?id=$id",
         'pedido'  => "pedido_ver.php?id=$id",
         'usuario' => "usuario_cadastro.php?id=$id",
+        'fornecedor' => "fornecedor_cadastro.php?id=$id",
+        'categoria' => 'categorias.php',
     ][$entidade] ?? null;
 }
 

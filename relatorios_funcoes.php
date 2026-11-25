@@ -1,6 +1,7 @@
 <?php
 // Consultas e funções dos relatórios, usadas por relatorios.php (tela) e
-// relatorio_exportar.php (arquivos CSV). Em todas, pedidos CANCELADOS não contam como venda.
+// relatorio_exportar.php (arquivos CSV). Em todas, só contam como venda os pedidos
+// ABERTO, PAGO e ENVIADO (orçamentos e cancelados ficam de fora).
 // Valores por pedido vêm da visão vw_pedidos (já com o desconto). O ranking de produtos soma
 // os itens vendidos (valor bruto, antes do desconto do pedido).
 
@@ -71,19 +72,36 @@ function limites(array $p): array
 /** Indicadores gerais de vendas no período. */
 function resumo_vendas(PDO $pdo, array $p): array
 {
+    $venda = "p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO')";
     $stmt = $pdo->prepare(
-        "SELECT COUNT(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.ID END)                   AS PEDIDOS,
-                COUNT(CASE WHEN p.STATUS =  'CANCELADO' THEN p.ID END)                   AS CANCELADOS,
-                COUNT(DISTINCT CASE WHEN p.STATUS <> 'CANCELADO' THEN p.CLIENTE_ID END)  AS CLIENTES,
-                COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.UNIDADES END), 0)  AS ITENS,
-                COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.DESCONTO END), 0)  AS DESCONTOS,
-                COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.TOTAL END), 0)     AS FATURAMENTO
+        "SELECT COUNT(CASE WHEN $venda THEN p.ID END)                         AS PEDIDOS,
+                COUNT(CASE WHEN p.STATUS = 'CANCELADO' THEN p.ID END)          AS CANCELADOS,
+                COUNT(CASE WHEN p.STATUS = 'ORCAMENTO' THEN p.ID END)          AS ORCAMENTOS,
+                COUNT(DISTINCT CASE WHEN $venda THEN p.CLIENTE_ID END)         AS CLIENTES,
+                COALESCE(SUM(CASE WHEN $venda THEN p.UNIDADES END), 0)         AS ITENS,
+                COALESCE(SUM(CASE WHEN $venda THEN p.DESCONTO END), 0)         AS DESCONTOS,
+                COALESCE(SUM(CASE WHEN $venda THEN p.TOTAL END), 0)            AS FATURAMENTO
            FROM vw_pedidos p
           WHERE p.CRIADO_EM BETWEEN ? AND ?"
     );
     $stmt->execute(limites($p));
     $r = $stmt->fetch();
     $r['TICKET'] = $r['PEDIDOS'] > 0 ? $r['FATURAMENTO'] / $r['PEDIDOS'] : 0;
+
+    // Lucro bruto: só dos itens com custo conhecido (custo desconhecido não é tratado como zero).
+    // Valor dos itens antes do desconto do pedido, como no ranking de produtos.
+    $stmt = $pdo->prepare(
+        "SELECT COALESCE(SUM(CASE WHEN i.CUSTO_UNITARIO IS NOT NULL THEN i.QUANTIDADE * i.PRECO_UNITARIO END), 0) AS RECEITA_COM_CUSTO,
+                COALESCE(SUM(i.QUANTIDADE * i.CUSTO_UNITARIO), 0)                                              AS CUSTO,
+                COUNT(CASE WHEN i.CUSTO_UNITARIO IS NULL THEN 1 END)                                           AS ITENS_SEM_CUSTO
+           FROM itens_pedido i
+          INNER JOIN pedidos p ON p.ID = i.PEDIDO_ID
+          WHERE $venda AND p.CRIADO_EM BETWEEN ? AND ?"
+    );
+    $stmt->execute(limites($p));
+    $r += $stmt->fetch();
+    $r['LUCRO'] = $r['RECEITA_COM_CUSTO'] - $r['CUSTO'];
+    $r['MARGEM'] = $r['RECEITA_COM_CUSTO'] > 0 ? $r['LUCRO'] / $r['RECEITA_COM_CUSTO'] * 100 : 0;
     return $r;
 }
 
@@ -102,7 +120,7 @@ function vendas_por_periodo(PDO $pdo, array $p): array
                 COUNT(*) AS PEDIDOS,
                 COALESCE(SUM(p.TOTAL), 0) AS VALOR
            FROM vw_pedidos p
-          WHERE p.STATUS <> 'CANCELADO' AND p.CRIADO_EM BETWEEN ? AND ?
+          WHERE p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO') AND p.CRIADO_EM BETWEEN ? AND ?
           GROUP BY CHAVE"
     );
     $stmt->execute(limites($p));
@@ -164,14 +182,37 @@ function produtos_mais_vendidos(PDO $pdo, array $p, ?int $limite = 5): array
         "SELECT pr.ID, pr.NOME,
                 SUM(i.QUANTIDADE) AS QUANTIDADE,
                 SUM(i.QUANTIDADE * i.PRECO_UNITARIO) AS VALOR,
+                SUM(i.QUANTIDADE * (i.PRECO_UNITARIO - i.CUSTO_UNITARIO)) AS LUCRO,
                 COUNT(DISTINCT p.ID) AS PEDIDOS
            FROM itens_pedido i
           INNER JOIN pedidos p ON p.ID = i.PEDIDO_ID
           INNER JOIN produtos pr ON pr.ID = i.PRODUTO_ID
-          WHERE p.STATUS <> 'CANCELADO' AND p.CRIADO_EM BETWEEN ? AND ?
+          WHERE p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO') AND p.CRIADO_EM BETWEEN ? AND ?
           GROUP BY pr.ID, pr.NOME
           ORDER BY QUANTIDADE DESC, VALOR DESC"
         . ($limite ? ' LIMIT ' . (int)$limite : '')
+    );
+    $stmt->execute(limites($p));
+    return $stmt->fetchAll();
+}
+
+/**
+ * Vendas por categoria de produto no período (valor bruto dos itens).
+ * Produtos sem categoria aparecem juntos em "Sem categoria".
+ */
+function vendas_por_categoria(PDO $pdo, array $p): array
+{
+    $stmt = $pdo->prepare(
+        "SELECT COALESCE(cat.NOME, 'Sem categoria') AS NOME,
+                SUM(i.QUANTIDADE) AS QUANTIDADE,
+                SUM(i.QUANTIDADE * i.PRECO_UNITARIO) AS VALOR
+           FROM itens_pedido i
+          INNER JOIN pedidos p ON p.ID = i.PEDIDO_ID
+          INNER JOIN produtos pr ON pr.ID = i.PRODUTO_ID
+           LEFT JOIN categorias cat ON cat.ID = pr.CATEGORIA_ID
+          WHERE p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO') AND p.CRIADO_EM BETWEEN ? AND ?
+          GROUP BY cat.ID, cat.NOME
+          ORDER BY VALOR DESC"
     );
     $stmt->execute(limites($p));
     return $stmt->fetchAll();
@@ -187,7 +228,7 @@ function melhores_clientes(PDO $pdo, array $p, ?int $limite = 5): array
                 MAX(p.CRIADO_EM) AS ULTIMA
            FROM vw_pedidos p
           INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
-          WHERE p.STATUS <> 'CANCELADO' AND p.CRIADO_EM BETWEEN ? AND ?
+          WHERE p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO') AND p.CRIADO_EM BETWEEN ? AND ?
           GROUP BY c.ID, c.NOME, c.EMAIL
           ORDER BY VALOR DESC, PEDIDOS DESC"
         . ($limite ? ' LIMIT ' . (int)$limite : '')

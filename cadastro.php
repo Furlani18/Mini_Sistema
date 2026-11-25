@@ -16,10 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$erros) {
         try {
-            $stmt = $pdo->prepare(
-                'INSERT INTO clientes (NOME, EMAIL, TELEFONE, CPF_CNPJ, CEP, LOGRADOURO, NUMERO, COMPLEMENTO, BAIRRO, CIDADE, UF, OBSERVACOES)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
+            $stmt = $pdo->prepare(sql_inserir_cliente());
             $stmt->execute(cliente_para_banco($valores));
             $novoId = (int)$pdo->lastInsertId();
             registrar_atividade($pdo, 'CRIOU', "Cadastrou o cliente '{$valores['nome']}'", 'cliente', $novoId);
@@ -30,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($e->getCode() !== '23000') {
                 throw $e;
             }
-            $erros['cpf_cnpj'] = 'Já existe um cliente com esse CPF/CNPJ.';
+            $erros = erro_cliente_duplicado($e);
         }
     }
 }

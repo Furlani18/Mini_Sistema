@@ -3,11 +3,13 @@ require_once 'auth.php';
 require_once 'conexao.php';
 require_once 'ui.php';
 require_once 'estoque.php';
+require_once 'financeiro.php';
 
 // Registro e edição de pedido (mesmo formulário):
-//   pedido_novo.php            → novo pedido
-//   pedido_novo.php?cliente=ID → novo pedido com o cliente já escolhido
-//   pedido_novo.php?id=ID      → editar um pedido ABERTO (itens, cliente, desconto, pagamento)
+//   pedido_novo.php              → novo pedido
+//   pedido_novo.php?orcamento=1  → novo orçamento (não baixa estoque)
+//   pedido_novo.php?cliente=ID   → novo pedido com o cliente já escolhido
+//   pedido_novo.php?id=ID        → editar um orçamento ou pedido ABERTO (itens, cliente, desconto, pagamento)
 //
 // Grava em 2 tabelas dentro de UMA transação:
 //   1) pedidos       → 1 linha (cliente, usuário logado, status, observação, desconto, pagamento)
@@ -18,6 +20,9 @@ $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $editando = $id > 0;
 $itensAntes = [];      // [produto_id => quantidade] já gravados (edição)
 $precosAntes = [];     // [produto_id => preço unitário] já gravados (edição)
+$custosAntes = [];     // [produto_id => custo unitário] já gravados (edição)
+$situacaoParcelas = ['TOTAL' => 0, 'RECEBIDAS' => 0];
+$editaveis = ['ORCAMENTO', 'ABERTO'];
 
 if ($editando) {
     $stmt = $pdo->prepare('SELECT CLIENTE_ID, STATUS, OBSERVACAO, DESCONTO, FORMA_PAGAMENTO FROM pedidos WHERE ID = ?');
@@ -28,28 +33,38 @@ if ($editando) {
         header('Location: pedidos.php');
         exit;
     }
-    if ($pedido['STATUS'] !== 'ABERTO') {
-        flash('error', 'Só pedidos com status "Aberto" podem ser editados.');
+    if (!in_array($pedido['STATUS'], $editaveis, true)) {
+        flash('error', 'Só orçamentos e pedidos com status "Aberto" podem ser editados.');
         header('Location: pedido_ver.php?id=' . $id);
         exit;
     }
-    $stmt = $pdo->prepare('SELECT PRODUTO_ID, QUANTIDADE, PRECO_UNITARIO FROM itens_pedido WHERE PEDIDO_ID = ? ORDER BY ID');
+    // Parcelas já recebidas "congelam" o valor do pedido
+    $stmt = $pdo->prepare('SELECT COUNT(*) AS TOTAL, COUNT(PAGO_EM) AS RECEBIDAS FROM parcelas WHERE PEDIDO_ID = ?');
+    $stmt->execute([$id]);
+    $situacaoParcelas = $stmt->fetch();
+    if ((int)$situacaoParcelas['RECEBIDAS'] > 0) {
+        flash('error', 'Este pedido já tem parcelas recebidas e não pode mais ser editado. Estorne os recebimentos para editar.');
+        header('Location: pedido_ver.php?id=' . $id);
+        exit;
+    }
+    $stmt = $pdo->prepare('SELECT PRODUTO_ID, QUANTIDADE, PRECO_UNITARIO, CUSTO_UNITARIO FROM itens_pedido WHERE PEDIDO_ID = ? ORDER BY ID');
     $stmt->execute([$id]);
     foreach ($stmt->fetchAll() as $item) {
         $itensAntes[(int)$item['PRODUTO_ID']] = (int)$item['QUANTIDADE'];
         $precosAntes[(int)$item['PRODUTO_ID']] = (float)$item['PRECO_UNITARIO'];
+        $custosAntes[(int)$item['PRODUTO_ID']] = $item['CUSTO_UNITARIO'];
     }
 }
 
 $clientes = $pdo->query('SELECT ID, NOME, EMAIL FROM clientes ORDER BY NOME')->fetchAll();
-$produtos = $pdo->query('SELECT ID, NOME, PRECO, ESTOQUE FROM produtos ORDER BY NOME')->fetchAll();
+$produtos = $pdo->query('SELECT ID, NOME, PRECO, ESTOQUE, SKU, CODIGO_BARRAS FROM produtos ORDER BY NOME')->fetchAll();
 $statusNovos = array_diff_key(status_pedidos(), ['CANCELADO' => true]);
 
 $erros = [];
 if ($editando) {
     $valores = [
         'cliente_id'      => (int)$pedido['CLIENTE_ID'],
-        'status'          => 'ABERTO',
+        'status'          => $pedido['STATUS'],
         'observacao'      => $pedido['OBSERVACAO'] ?? '',
         'desconto'        => (float)$pedido['DESCONTO'] > 0 ? number_format((float)$pedido['DESCONTO'], 2, ',', '.') : '',
         'forma_pagamento' => $pedido['FORMA_PAGAMENTO'] ?? '',
@@ -61,7 +76,7 @@ if ($editando) {
 } else {
     $valores = [
         'cliente_id'      => isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0,
-        'status'          => 'ABERTO',
+        'status'          => isset($_GET['orcamento']) ? 'ORCAMENTO' : 'ABERTO',
         'observacao'      => '',
         'desconto'        => '',
         'forma_pagamento' => '',
@@ -75,7 +90,7 @@ if (!$linhas) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $valores = [
         'cliente_id'      => (int)($_POST['cliente_id'] ?? 0),
-        'status'          => $editando ? 'ABERTO' : (string)($_POST['status'] ?? 'ABERTO'),
+        'status'          => $editando ? $pedido['STATUS'] : (string)($_POST['status'] ?? 'ABERTO'),
         'observacao'      => trim((string)($_POST['observacao'] ?? '')),
         'desconto'        => trim((string)($_POST['desconto'] ?? '')),
         'forma_pagamento' => (string)($_POST['forma_pagamento'] ?? ''),
@@ -141,9 +156,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Trava o pedido e confere de novo: alguém pode ter mudado o status nesse meio-tempo
                 $stmt = $pdo->prepare('SELECT STATUS FROM pedidos WHERE ID = ? FOR UPDATE');
                 $stmt->execute([$id]);
-                if ($stmt->fetchColumn() !== 'ABERTO') {
-                    throw new RuntimeException('Este pedido não está mais em aberto e não pode ser editado.');
+                if ($stmt->fetchColumn() !== $pedido['STATUS']) {
+                    throw new RuntimeException('O status deste pedido mudou enquanto você editava. Abra-o de novo.');
                 }
+                $stmt = $pdo->prepare('SELECT COUNT(*) FROM parcelas WHERE PEDIDO_ID = ? AND PAGO_EM IS NOT NULL');
+                $stmt->execute([$id]);
+                if ((int)$stmt->fetchColumn() > 0) {
+                    throw new RuntimeException('Uma parcela deste pedido foi recebida enquanto você editava. Estorne o recebimento para editar.');
+                }
+                // O valor pode mudar: as parcelas (nenhuma recebida) são apagadas para serem refeitas
+                $pdo->prepare('DELETE FROM parcelas WHERE PEDIDO_ID = ?')->execute([$id]);
                 $pdo->prepare('UPDATE pedidos SET CLIENTE_ID = ?, OBSERVACAO = ?, DESCONTO = ?, FORMA_PAGAMENTO = ? WHERE ID = ?')
                     ->execute([...$dadosPedido, $id]);
                 $pdo->prepare('DELETE FROM itens_pedido WHERE PEDIDO_ID = ?')->execute([$id]);
@@ -156,16 +178,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pedidoId = (int)$pdo->lastInsertId();
             }
 
-            // Produto que já estava no pedido mantém o preço da venda original;
-            // produto novo usa o preço atual (copiado de produtos — se o preço mudar depois, o pedido não muda)
-            $itemComPreco = $pdo->prepare('INSERT INTO itens_pedido (PEDIDO_ID, PRODUTO_ID, QUANTIDADE, PRECO_UNITARIO) VALUES (?, ?, ?, ?)');
+            // Produto que já estava no pedido mantém o preço (e o custo) da venda original;
+            // produto novo usa o preço e o custo atuais (copiados de produtos — se mudarem depois, o pedido não muda)
+            $itemComPreco = $pdo->prepare(
+                'INSERT INTO itens_pedido (PEDIDO_ID, PRODUTO_ID, QUANTIDADE, PRECO_UNITARIO, CUSTO_UNITARIO) VALUES (?, ?, ?, ?, ?)'
+            );
             $itemPrecoAtual = $pdo->prepare(
-                'INSERT INTO itens_pedido (PEDIDO_ID, PRODUTO_ID, QUANTIDADE, PRECO_UNITARIO)
-                 SELECT ?, ID, ?, PRECO FROM produtos WHERE ID = ?'
+                'INSERT INTO itens_pedido (PEDIDO_ID, PRODUTO_ID, QUANTIDADE, PRECO_UNITARIO, CUSTO_UNITARIO)
+                 SELECT ?, ID, ?, PRECO, CUSTO FROM produtos WHERE ID = ?'
             );
             foreach ($itens as $produtoId => $qtd) {
                 if (isset($precosAntes[$produtoId])) {
-                    $itemComPreco->execute([$pedidoId, $produtoId, $qtd, $precosAntes[$produtoId]]);
+                    $itemComPreco->execute([$pedidoId, $produtoId, $qtd, $precosAntes[$produtoId], $custosAntes[$produtoId] ?? null]);
                 } else {
                     $itemPrecoAtual->execute([$pedidoId, $qtd, $produtoId]);
                     if ($itemPrecoAtual->rowCount() === 0) {
@@ -174,17 +198,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            $faltando = $editando
-                ? ajustar_estoque_pedido($pdo, $pedidoId, $itensAntes, $itens)
-                : baixar_estoque($pdo, $pedidoId, "Pedido #$pedidoId");
+            // Orçamento não mexe no estoque; pedido de venda baixa (ou ajusta a diferença na edição)
+            $faltando = [];
+            if (status_eh_venda($valores['status'])) {
+                $faltando = $editando
+                    ? ajustar_estoque_pedido($pdo, $pedidoId, $itensAntes, $itens)
+                    : baixar_estoque($pdo, $pedidoId, "Pedido #$pedidoId");
+            }
             if ($faltando) {
                 throw new RuntimeException('Estoque insuficiente para: ' . implode(', ', $faltando) . '.');
             }
 
             $pdo->commit();
+            $doc = $valores['status'] === 'ORCAMENTO' ? 'orçamento' : 'pedido';
             registrar_atividade($pdo, $editando ? 'ALTEROU' : 'CRIOU',
-                ($editando ? 'Editou' : 'Registrou') . " o pedido #$pedidoId", 'pedido', $pedidoId);
-            flash('success', $editando ? "Pedido #$pedidoId atualizado!" : "Pedido #$pedidoId registrado com sucesso!");
+                ($editando ? 'Editou' : 'Registrou') . " o $doc #$pedidoId", 'pedido', $pedidoId);
+            $aviso = (int)$situacaoParcelas['TOTAL'] > 0 ? ' As parcelas foram apagadas: gere-as de novo com o valor atualizado.' : '';
+            $Doc = $doc === 'orçamento' ? 'Orçamento' : 'Pedido';
+            flash('success', ($editando ? "$Doc #$pedidoId atualizado!" : "$Doc #$pedidoId registrado com sucesso!") . $aviso);
             header('Location: pedido_ver.php?id=' . $pedidoId);
             exit;
         } catch (RuntimeException $e) {
@@ -197,7 +228,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$titulo = $editando ? "Editar Pedido #$id" : 'Novo Pedido';
+$ehOrcamento = $valores['status'] === 'ORCAMENTO';
+$titulo = $editando
+    ? ($ehOrcamento ? "Editar Orçamento #$id" : "Editar Pedido #$id")
+    : ($ehOrcamento ? 'Novo Orçamento' : 'Novo Pedido');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -211,8 +245,8 @@ $titulo = $editando ? "Editar Pedido #$id" : 'Novo Pedido';
     <div class="container">
         <?php
         $breadcrumb = $editando
-            ? ['Pedidos' => 'pedidos.php', "Pedido #$id" => "pedido_ver.php?id=$id", 'Editar' => null]
-            : ['Pedidos' => 'pedidos.php', 'Novo Pedido' => null];
+            ? ['Pedidos' => 'pedidos.php', ($ehOrcamento ? 'Orçamento' : 'Pedido') . " #$id" => "pedido_ver.php?id=$id", 'Editar' => null]
+            : ['Pedidos' => 'pedidos.php', $titulo => null];
         include __DIR__ . '/header.php';
         ?>
 
@@ -235,7 +269,10 @@ $titulo = $editando ? "Editar Pedido #$id" : 'Novo Pedido';
                 <?php if ($editando): ?>
                     <div class="alert alert-info">
                         <?php echo icone('alerta'); ?>
-                        <span>Produtos que já estavam no pedido mantêm o preço da venda original. O estoque é ajustado só pela diferença.</span>
+                        <span><?php echo $ehOrcamento
+                            ? 'Orçamentos não reservam estoque. Produtos que já estavam no orçamento mantêm o preço original.'
+                            : 'Produtos que já estavam no pedido mantêm o preço da venda original. O estoque é ajustado só pela diferença.'; ?>
+                            <?php if ((int)$situacaoParcelas['TOTAL'] > 0): ?> As parcelas atuais serão apagadas ao salvar, para serem refeitas com o novo valor.<?php endif; ?></span>
                     </div>
                 <?php endif; ?>
 
@@ -265,11 +302,12 @@ $titulo = $editando ? "Editar Pedido #$id" : 'Novo Pedido';
                         <?php if (!$editando): ?>
                             <div class="form-group<?php echo isset($erros['status']) ? ' has-error' : ''; ?>">
                                 <label for="status">Status</label>
-                                <select id="status" name="status">
+                                <select id="status" name="status" aria-describedby="status-ajuda" data-status-pedido>
                                     <?php foreach ($statusNovos as $valor => $rotulo): ?>
                                         <option value="<?php echo $valor; ?>" <?php echo $valor === $valores['status'] ? 'selected' : ''; ?>><?php echo $rotulo; ?></option>
                                     <?php endforeach; ?>
                                 </select>
+                                <small class="field-help" id="status-ajuda">"Orçamento" não baixa o estoque nem conta como venda.</small>
                                 <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['status'] ?? ''); ?></span></small>
                             </div>
                         <?php endif; ?>
@@ -295,6 +333,13 @@ $titulo = $editando ? "Editar Pedido #$id" : 'Novo Pedido';
                     <fieldset class="itens-pedido">
                         <legend>Itens do pedido <span class="required" aria-hidden="true">*</span></legend>
 
+                        <div class="leitor-codigo">
+                            <label for="buscaCodigo"><?php echo icone('codigo-barras'); ?> Adicionar por código</label>
+                            <input type="text" id="buscaCodigo" placeholder="SKU ou código de barras + Enter" autocomplete="off"
+                                   aria-describedby="buscaCodigoStatus" data-busca-codigo>
+                            <small id="buscaCodigoStatus" class="leitor-status" aria-live="polite"></small>
+                        </div>
+
                         <div id="linhasItens">
                             <?php foreach ($linhas as $linha): ?>
                                 <div class="item-linha" data-item-linha>
@@ -308,8 +353,9 @@ $titulo = $editando ? "Editar Pedido #$id" : 'Novo Pedido';
                                             $disponivel = (int)$p['ESTOQUE'] + ($itensAntes[$pid] ?? 0);
                                             ?>
                                             <option value="<?php echo $pid; ?>" data-preco="<?php echo $preco; ?>"
+                                                data-codigos="<?php echo htmlspecialchars(trim(mb_strtolower((string)$p['SKU']) . ' ' . (string)$p['CODIGO_BARRAS'])); ?>"
                                                 <?php echo $pid === $linha['produto_id'] ? 'selected' : ''; ?>>
-                                                <?php echo htmlspecialchars($p['NOME']) . ' — ' . moeda($preco) . ' (disponível: ' . $disponivel . ')'; ?>
+                                                <?php echo htmlspecialchars($p['NOME']) . ($p['SKU'] ? ' [' . htmlspecialchars($p['SKU']) . ']' : '') . ' — ' . moeda($preco) . ' (disponível: ' . $disponivel . ')'; ?>
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
@@ -341,7 +387,7 @@ $titulo = $editando ? "Editar Pedido #$id" : 'Novo Pedido';
                     </fieldset>
 
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary"><?php echo icone('salvar'); ?> <?php echo $editando ? 'Salvar Alterações' : 'Registrar Pedido'; ?></button>
+                        <button type="submit" class="btn btn-primary"><?php echo icone('salvar'); ?> <span data-rotulo-salvar><?php echo $editando ? 'Salvar Alterações' : ($ehOrcamento ? 'Salvar Orçamento' : 'Registrar Pedido'); ?></span></button>
                         <a href="<?php echo $editando ? 'pedido_ver.php?id=' . $id : 'pedidos.php'; ?>" class="btn btn-outline">
                             <?php echo $editando ? icone('fechar') . ' Cancelar' : icone('lista') . ' Ver Pedidos'; ?></a>
                     </div>

@@ -31,11 +31,11 @@ $stmt->execute($parametros);
 $pag = paginacao((int)$stmt->fetchColumn());
 
 $stmt = $pdo->prepare(
-    "SELECT u.ID, u.NOME, u.EMAIL, u.TELEFONE, u.PERFIL, u.CRIADO_EM, COUNT(p.ID) AS PEDIDOS
+    "SELECT u.ID, u.NOME, u.EMAIL, u.TELEFONE, u.PERFIL, u.TROCAR_SENHA, u.CRIADO_EM, COUNT(p.ID) AS PEDIDOS
        FROM usuarios u
        LEFT JOIN pedidos p ON p.USUARIO_ID = u.ID
        $where
-      GROUP BY u.ID, u.NOME, u.EMAIL, u.TELEFONE, u.PERFIL, u.CRIADO_EM
+      GROUP BY u.ID, u.NOME, u.EMAIL, u.TELEFONE, u.PERFIL, u.TROCAR_SENHA, u.CRIADO_EM
       ORDER BY {$ordem['sql']}, u.ID
       LIMIT {$pag['limite']} OFFSET {$pag['offset']}"
 );
@@ -84,6 +84,7 @@ $meuId = (int)$_SESSION['usuario_id'];
                 <?php if (!$usuarios): ?>
                     <p class="no-results is-visible">Nenhum usuário encontrado para “<?php echo htmlspecialchars($q); ?>”.</p>
                 <?php else: ?>
+                    <?php echo seletor_ordenacao(['nome' => 'Nome', 'perfil' => 'Perfil', 'pedidos' => 'Pedidos', 'criado' => 'Cadastro'], $ordem); ?>
                     <div class="table-responsive">
                         <table class="client-table">
                             <thead>
@@ -105,7 +106,8 @@ $meuId = (int)$_SESSION['usuario_id'];
                                                 <span class="avatar" aria-hidden="true"><?php echo htmlspecialchars(iniciais($u['NOME'])); ?></span>
                                                 <span>
                                                     <span class="client-name"><?php echo $nome; ?>
-                                                        <?php if ($souEu): ?><span class="badge badge-tipo">Você</span><?php endif; ?></span>
+                                                        <?php if ($souEu): ?><span class="badge badge-tipo">Você</span><?php endif; ?>
+                                                        <?php if ($u['TROCAR_SENHA']): ?><span class="badge badge-aberto" title="Vai escolher uma nova senha no próximo acesso">Troca de senha pendente</span><?php endif; ?></span>
                                                     <span class="client-id">#<?php echo $u['ID']; ?></span>
                                                 </span>
                                             </div>

@@ -36,7 +36,7 @@ $pag = paginacao((int)$stmt->fetchColumn());
 $stmt = $pdo->prepare(
     "SELECT c.ID AS id, c.NOME AS nome, c.EMAIL AS email, c.TELEFONE AS telefone,
             COUNT(p.ID) AS pedidos,
-            COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.TOTAL END), 0) AS gasto
+            COALESCE(SUM(CASE WHEN p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO') THEN p.TOTAL END), 0) AS gasto
        FROM clientes c
        LEFT JOIN vw_pedidos p ON p.CLIENTE_ID = c.ID
        $where
@@ -96,6 +96,7 @@ $totalCadastrados = $q === '' ? $pag['total'] : (int)$pdo->query('SELECT COUNT(*
                     <?php if (!$clientes): ?>
                         <p class="no-results is-visible">Nenhum cliente encontrado para “<?php echo htmlspecialchars($q); ?>”.</p>
                     <?php else: ?>
+                        <?php echo seletor_ordenacao(['nome' => 'Nome', 'id' => 'Cadastro', 'pedidos' => 'Pedidos', 'gasto' => 'Total gasto'], $ordem); ?>
                         <div class="table-responsive">
                             <table class="client-table">
                                 <thead>
@@ -142,7 +143,7 @@ $totalCadastrados = $q === '' ? $pag['total'] : (int)$pdo->query('SELECT COUNT(*
                                                        class="btn-icon btn-icon-danger"
                                                        title="Apagar"
                                                        aria-label="Apagar <?php echo $nome; ?>"
-                                                       data-confirmar-exclusao="<?php echo $nome; ?>"><?php echo icone('lixeira'); ?></a>
+                                                       data-lixeira data-confirmar-exclusao="<?php echo $nome; ?>"><?php echo icone('lixeira'); ?></a>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>

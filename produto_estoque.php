@@ -8,11 +8,12 @@ require_once 'estoque.php';
 // Estoque de um produto: lançar entrada (chegou mercadoria), saída (perda, uso interno…)
 // ou ajuste para um valor exato (contagem/inventário), sempre com motivo,
 // e ver o histórico completo de movimentações (tabela movimentos_estoque).
+// Na entrada, informar o fornecedor e o custo unitário recalcula o custo médio do produto.
 //   produto_estoque.php?id=ID
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-$buscar = $pdo->prepare('SELECT ID, NOME, PRECO, ESTOQUE FROM produtos WHERE ID = ?');
+$buscar = $pdo->prepare('SELECT ID, NOME, PRECO, CUSTO, ESTOQUE FROM produtos WHERE ID = ?');
 $buscar->execute([$id]);
 $produto = $buscar->fetch();
 if (!$produto) {
@@ -26,15 +27,28 @@ $operacoes = [
     'SAIDA'   => 'Saída (tirar do estoque)',
     'AJUSTE'  => 'Ajuste (definir o valor exato contado)',
 ];
-$valores = ['operacao' => 'ENTRADA', 'quantidade' => '', 'motivo' => ''];
+$valores = ['operacao' => 'ENTRADA', 'quantidade' => '', 'motivo' => '', 'fornecedor_id' => '', 'custo' => ''];
 $erros = [];
+$fornecedores = $pdo->query('SELECT ID, NOME FROM fornecedores ORDER BY NOME')->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $valores = [
         'operacao'   => (string)($_POST['operacao'] ?? ''),
         'quantidade' => trim((string)($_POST['quantidade'] ?? '')),
         'motivo'     => trim((string)($_POST['motivo'] ?? '')),
+        'fornecedor_id' => trim((string)($_POST['fornecedor_id'] ?? '')),
+        'custo'      => trim((string)($_POST['custo'] ?? '')),
     ];
+    // Fornecedor e custo só valem para entradas
+    $ehEntrada = $valores['operacao'] === 'ENTRADA';
+    $fornecedorId = $ehEntrada && $valores['fornecedor_id'] !== '' ? (int)$valores['fornecedor_id'] : null;
+    $custo = $ehEntrada && $valores['custo'] !== '' ? converter_moeda($valores['custo']) : null;
+    if ($fornecedorId !== null && !in_array($fornecedorId, array_map('intval', array_column($fornecedores, 'ID')), true)) {
+        $erros['fornecedor_id'] = 'Escolha um fornecedor da lista.';
+    }
+    if ($ehEntrada && $valores['custo'] !== '' && ($custo === null || $custo > VALOR_MAXIMO)) {
+        $erros['custo'] = 'Informe um custo válido, por exemplo 49,90, ou deixe em branco.';
+    }
 
     if (!isset($operacoes[$valores['operacao']])) {
         $erros['operacao'] = 'Escolha o tipo de movimentação.';
@@ -61,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $variacao = $valores['operacao'] === 'ENTRADA' ? $qtd : -$qtd;
         }
 
-        $erro = movimentar_estoque($pdo, $id, $variacao, $valores['operacao'], $valores['motivo']);
+        $erro = movimentar_estoque($pdo, $id, $variacao, $valores['operacao'], $valores['motivo'], null, $fornecedorId, $custo);
         if ($erro !== null) {
             $pdo->rollBack();
             $erros['quantidade'] = 'Estoque insuficiente: ' . $erro . '.';
@@ -71,8 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $pdo->commit();
             $sinal = $variacao > 0 ? '+' . $variacao : (string)$variacao;
-            registrar_atividade($pdo, 'ESTOQUE', "Estoque de '{$produto['NOME']}': $sinal un. ({$valores['motivo']})", 'produto', $id);
-            flash('success', "Estoque atualizado: $sinal un.");
+            registrar_atividade($pdo, 'ESTOQUE', "Estoque de '{$produto['NOME']}': $sinal un. ({$valores['motivo']})"
+                . ($custo !== null ? ' a ' . moeda($custo) . '/un.' : ''), 'produto', $id);
+            flash('success', "Estoque atualizado: $sinal un." . ($custo !== null ? ' Custo médio recalculado.' : ''));
             header('Location: produto_estoque.php?id=' . $id);
             exit;
         }
@@ -92,9 +107,11 @@ $stmt->execute($parametros);
 $pag = paginacao((int)$stmt->fetchColumn());
 
 $stmt = $pdo->prepare(
-    "SELECT m.TIPO, m.QUANTIDADE, m.ESTOQUE_APOS, m.MOTIVO, m.CRIADO_EM, m.PEDIDO_ID, u.NOME AS USUARIO
+    "SELECT m.TIPO, m.QUANTIDADE, m.ESTOQUE_APOS, m.MOTIVO, m.CRIADO_EM, m.PEDIDO_ID, m.CUSTO_UNITARIO,
+            m.FORNECEDOR_ID, f.NOME AS FORNECEDOR, u.NOME AS USUARIO
        FROM movimentos_estoque m
        LEFT JOIN usuarios u ON u.ID = m.USUARIO_ID
+       LEFT JOIN fornecedores f ON f.ID = m.FORNECEDOR_ID
        $where
       ORDER BY m.CRIADO_EM DESC, m.ID DESC
       LIMIT {$pag['limite']} OFFSET {$pag['offset']}"
@@ -144,7 +161,18 @@ $nome = htmlspecialchars($produto['NOME']);
                 <div class="indicador">
                     <p class="indicador-rotulo">Valor em estoque</p>
                     <p class="indicador-valor"><?php echo moeda((int)$produto['ESTOQUE'] * (float)$produto['PRECO']); ?></p>
-                    <p class="indicador-detalhe">Pelo preço atual (<?php echo moeda((float)$produto['PRECO']); ?>)</p>
+                    <p class="indicador-detalhe">Pelo preço de venda (<?php echo moeda((float)$produto['PRECO']); ?>)</p>
+                </div>
+                <div class="indicador">
+                    <p class="indicador-rotulo">Custo médio</p>
+                    <p class="indicador-valor"><?php echo $produto['CUSTO'] !== null ? moeda((float)$produto['CUSTO']) : '—'; ?></p>
+                    <p class="indicador-detalhe">
+                        <?php if ($produto['CUSTO'] !== null && (float)$produto['PRECO'] > 0): ?>
+                            Margem de <?php echo number_format(((float)$produto['PRECO'] - (float)$produto['CUSTO']) / (float)$produto['PRECO'] * 100, 1, ',', '.'); ?>%
+                        <?php else: ?>
+                            Informe o custo numa entrada
+                        <?php endif; ?>
+                    </p>
                 </div>
                 <div class="indicador">
                     <p class="indicador-rotulo">Entradas (30 dias)</p>
@@ -159,7 +187,7 @@ $nome = htmlspecialchars($produto['NOME']);
             </section>
 
             <div class="paineis paineis-estoque">
-                <section class="form-container">
+                <section class="form-container" id="movimentar">
                     <h3 class="section-title"><?php echo icone('plus'); ?> Nova movimentação</h3>
                     <?php if ($erros): ?>
                         <div class="alert alert-error" role="alert"><?php echo icone('erro'); ?><span>Não foi possível movimentar. Confira os campos.</span></div>
@@ -177,10 +205,29 @@ $nome = htmlspecialchars($produto['NOME']);
                         </div>
                         <div class="form-group<?php echo isset($erros['quantidade']) ? ' has-error' : ''; ?>">
                             <label for="quantidade">Quantidade <span class="required" aria-hidden="true">*</span></label>
-                            <input type="number" id="quantidade" name="quantidade" min="0" max="1000000" step="1" required
+                            <input type="number" id="quantidade" name="quantidade" min="0" max="1000000" step="1" required<?php echo isset($_GET['entrada']) && !$erros ? ' autofocus' : ''; ?>
                                    value="<?php echo htmlspecialchars($valores['quantidade']); ?>" aria-describedby="quantidade-ajuda">
                             <small class="field-help" id="quantidade-ajuda">No ajuste, informe o total contado na prateleira.</small>
                             <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['quantidade'] ?? ''); ?></span></small>
+                        </div>
+                        <div class="campos-entrada" data-so-entrada>
+                            <div class="form-group<?php echo isset($erros['fornecedor_id']) ? ' has-error' : ''; ?>">
+                                <label for="fornecedor_id">Fornecedor</label>
+                                <select id="fornecedor_id" name="fornecedor_id">
+                                    <option value=""><?php echo $fornecedores ? 'Não informado' : 'Nenhum cadastrado'; ?></option>
+                                    <?php foreach ($fornecedores as $f): ?>
+                                        <option value="<?php echo $f['ID']; ?>" <?php echo (string)$f['ID'] === $valores['fornecedor_id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($f['NOME']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['fornecedor_id'] ?? ''); ?></span></small>
+                            </div>
+                            <div class="form-group<?php echo isset($erros['custo']) ? ' has-error' : ''; ?>">
+                                <label for="custo">Custo unitário (R$)</label>
+                                <input type="text" id="custo" name="custo" inputmode="numeric" placeholder="0,00" data-mascara-moeda autocomplete="off"
+                                       value="<?php echo htmlspecialchars($valores['custo']); ?>" aria-describedby="custo-ajuda">
+                                <small class="field-help" id="custo-ajuda">Opcional. Recalcula o custo médio.</small>
+                                <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['custo'] ?? ''); ?></span></small>
+                            </div>
                         </div>
                         <div class="form-group<?php echo isset($erros['motivo']) ? ' has-error' : ''; ?>">
                             <label for="motivo">Motivo <span class="required" aria-hidden="true">*</span></label>
@@ -238,6 +285,13 @@ $nome = htmlspecialchars($produto['NOME']);
                                                 <?php else: ?>
                                                     <?php echo htmlspecialchars($m['MOTIVO']); ?>
                                                 <?php endif; ?>
+                                                <?php if ($m['FORNECEDOR'] || $m['CUSTO_UNITARIO'] !== null): ?>
+                                                    <br><small class="text-muted">
+                                                        <?php if ($m['FORNECEDOR']): ?><a href="fornecedor_cadastro.php?id=<?php echo $m['FORNECEDOR_ID']; ?>" class="text-link"><?php echo htmlspecialchars($m['FORNECEDOR']); ?></a><?php endif; ?>
+                                                        <?php echo $m['FORNECEDOR'] && $m['CUSTO_UNITARIO'] !== null ? '·' : ''; ?>
+                                                        <?php echo $m['CUSTO_UNITARIO'] !== null ? moeda((float)$m['CUSTO_UNITARIO']) . '/un.' : ''; ?>
+                                                    </small>
+                                                <?php endif; ?>
                                             </td>
                                             <td class="num" data-label="Qtd."><strong class="mov-qtd <?php echo (int)$m['QUANTIDADE'] > 0 ? 'is-entrada' : 'is-saida'; ?>"><?php echo (int)$m['QUANTIDADE'] > 0 ? '+' . (int)$m['QUANTIDADE'] : '−' . abs((int)$m['QUANTIDADE']); ?></strong></td>
                                             <td class="num" data-label="Saldo"><?php echo (int)$m['ESTOQUE_APOS']; ?></td>
@@ -254,5 +308,17 @@ $nome = htmlspecialchars($produto['NOME']);
 
         <?php include __DIR__ . '/footer.php'; ?>
     </div>
+    <script src="js/moeda.js"></script>
+    <script>
+        // Fornecedor e custo só aparecem quando o tipo é "Entrada"
+        (function () {
+            var tipo = document.getElementById('operacao');
+            var campos = document.querySelector('[data-so-entrada]');
+            if (!tipo || !campos) return;
+            function atualizar() { campos.hidden = tipo.value !== 'ENTRADA'; }
+            tipo.addEventListener('change', atualizar);
+            atualizar();
+        })();
+    </script>
 </body>
 </html>

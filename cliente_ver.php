@@ -29,8 +29,8 @@ $stmt = $pdo->prepare(
 $stmt->execute([$id]);
 $pedidos = $stmt->fetchAll();
 
-// Indicadores (cancelados não contam como compra)
-$validos = array_filter($pedidos, fn($p) => $p['STATUS'] !== 'CANCELADO');
+// Indicadores (orçamentos e cancelados não contam como compra)
+$validos = array_filter($pedidos, fn($p) => in_array($p['STATUS'], ['ABERTO', 'PAGO', 'ENVIADO'], true));
 $totalGasto = array_sum(array_map(fn($p) => (float)$p['TOTAL'], $validos));
 $qtdValidos = count($validos);
 $ticketMedio = $qtdValidos ? $totalGasto / $qtdValidos : 0;
@@ -45,7 +45,7 @@ $stmt = $pdo->prepare(
        FROM itens_pedido i
       INNER JOIN pedidos p ON p.ID = i.PEDIDO_ID
       INNER JOIN produtos pr ON pr.ID = i.PRODUTO_ID
-      WHERE p.CLIENTE_ID = ? AND p.STATUS <> 'CANCELADO'
+      WHERE p.CLIENTE_ID = ? AND p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO')
       GROUP BY pr.ID, pr.NOME
       ORDER BY QUANTIDADE DESC, VALOR DESC
       LIMIT 5"
@@ -70,6 +70,17 @@ function tempo_desde(string $data): string
 }
 
 $nome = htmlspecialchars($cliente['NOME']);
+$primeiroNome = explode(' ', trim($cliente['NOME']))[0];
+
+// Aniversário: idade e se é hoje
+$idade = null;
+$aniversarioHoje = false;
+if ($cliente['NASCIMENTO']) {
+    $nascimento = new DateTime($cliente['NASCIMENTO']);
+    $idade = $nascimento->diff(new DateTime('today'))->y;
+    $aniversarioHoje = $nascimento->format('m-d') === date('m-d');
+}
+$whatsapp = whatsapp_link($cliente['TELEFONE'], $aniversarioHoje ? "Feliz aniversário, $primeiroNome! 🎉" : "Olá, $primeiroNome!");
 $indicadores = [
     ['Total gasto', moeda($totalGasto), $qtdValidos ? 'Sem contar cancelados' : 'Nenhuma compra ainda'],
     ['Pedidos', (string)count($pedidos), $emAberto ? ($emAberto === 1 ? '1 em aberto' : "$emAberto em aberto") : 'Nenhum em aberto'],
@@ -99,6 +110,10 @@ $indicadores = [
                         <?php if ($cliente['TELEFONE']): ?>
                             <li><?php echo icone('telefone'); ?> <?php echo htmlspecialchars($cliente['TELEFONE']); ?></li>
                         <?php endif; ?>
+                        <?php if ($cliente['NASCIMENTO']): ?>
+                            <li<?php echo $aniversarioHoje ? ' class="is-aniversario"' : ''; ?>><?php echo icone('bolo'); ?>
+                                <?php echo date('d/m/Y', strtotime($cliente['NASCIMENTO'])); ?> (<?php echo $idade; ?> anos)<?php echo $aniversarioHoje ? ' · aniversário hoje!' : ''; ?></li>
+                        <?php endif; ?>
                         <?php if ($cliente['CPF_CNPJ']): ?>
                             <li><?php echo icone('documento'); ?> <?php echo strlen($cliente['CPF_CNPJ']) === 14 ? 'CNPJ' : 'CPF'; ?> <?php echo formatar_documento($cliente['CPF_CNPJ']); ?></li>
                         <?php endif; ?>
@@ -110,6 +125,9 @@ $indicadores = [
                     <?php endif; ?>
                 </div>
                 <div class="page-head-acoes">
+                    <?php if ($whatsapp): ?>
+                        <a href="<?php echo htmlspecialchars($whatsapp); ?>" class="btn btn-outline btn-whatsapp" target="_blank" rel="noopener"><?php echo icone('whatsapp'); ?> WhatsApp</a>
+                    <?php endif; ?>
                     <a href="atualizar.php?id=<?php echo $cliente['ID']; ?>" class="btn btn-outline"><?php echo icone('editar'); ?> Editar</a>
                     <a href="pedido_novo.php?cliente=<?php echo $cliente['ID']; ?>" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Pedido</a>
                 </div>
@@ -160,7 +178,7 @@ $indicadores = [
                                             </small>
                                         </span>
                                         <?php echo badge_status($p['STATUS']); ?>
-                                        <span class="painel-valor<?php echo $p['STATUS'] === 'CANCELADO' ? ' is-riscado' : ''; ?>"><?php echo moeda((float)$p['TOTAL']); ?></span>
+                                        <span class="painel-valor<?php echo in_array($p['STATUS'], ['CANCELADO', 'ORCAMENTO'], true) ? ' is-riscado' : ''; ?>"><?php echo moeda((float)$p['TOTAL']); ?></span>
                                     </a>
                                 </li>
                             <?php endforeach; ?>
@@ -194,7 +212,7 @@ $indicadores = [
                 <a href="clientes.php" class="btn btn-outline"><?php echo icone('lista'); ?> Ver Clientes</a>
                 <?php if (eh_admin()): ?>
                 <a href="apagar.php?id=<?php echo $cliente['ID']; ?>" class="btn btn-danger-outline"
-                   data-confirmar-exclusao="<?php echo $nome; ?>"><?php echo icone('lixeira'); ?> Apagar Cliente</a>
+                   data-lixeira data-confirmar-exclusao="<?php echo $nome; ?>"><?php echo icone('lixeira'); ?> Apagar Cliente</a>
                 <?php endif; ?>
             </div>
         </main>

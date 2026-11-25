@@ -31,7 +31,7 @@ $iconesToast = ['success' => 'sucesso', 'error' => 'erro', 'warning' => 'alerta'
         <h2 id="modalTitulo">Confirmar exclusão</h2>
         <p id="modalTexto">
             Tem certeza que deseja apagar <strong data-modal-nome>este registro</strong>?
-            Esta ação não pode ser desfeita.
+            <span data-modal-aviso>Esta ação não pode ser desfeita.</span>
         </p>
         <div class="modal-actions">
             <button type="button" class="btn btn-outline" data-modal-cancelar>Cancelar</button>
@@ -44,4 +44,20 @@ $iconesToast = ['success' => 'sucesso', 'error' => 'erro', 'warning' => 'alerta'
     </div>
 </dialog>
 
+<dialog class="busca-global" id="buscaGlobal" aria-label="Busca rápida">
+    <div class="busca-caixa">
+        <div class="busca-topo">
+            <?php echo icone('busca'); ?>
+            <input type="search" placeholder="Buscar clientes, produtos, pedidos, fornecedores…" autocomplete="off"
+                   aria-label="Buscar em todo o sistema" role="combobox" aria-expanded="true" aria-controls="buscaResultados"
+                   data-busca-campo>
+            <kbd>Esc</kbd>
+        </div>
+        <ul class="busca-resultados" id="buscaResultados" role="listbox" data-busca-resultados></ul>
+        <p class="busca-status" aria-live="polite" data-busca-status>Digite pelo menos 2 letras: nome, email, nº do pedido, SKU…</p>
+        <p class="busca-dicas"><kbd>↑</kbd><kbd>↓</kbd> navegar · <kbd>Enter</kbd> abrir · <kbd>Ctrl</kbd>+<kbd>K</kbd> ou <kbd>/</kbd> em qualquer tela</p>
+    </div>
+</dialog>
+
 <script src="js/app.js"></script>
+<script src="js/busca.js"></script>

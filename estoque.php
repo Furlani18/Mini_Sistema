@@ -1,10 +1,13 @@
 <?php
+require_once __DIR__ . '/ui.php';
+
 // Movimentação de estoque. TODA alteração de estoque passa por movimentar_estoque(),
 // que atualiza produtos.ESTOQUE e grava uma linha em movimentos_estoque (histórico).
 //
-// Regras dos pedidos: criar pedido baixa o estoque; cancelar ou apagar devolve;
-// reabrir um pedido cancelado baixa de novo (se houver estoque); editar os itens
-// de um pedido aberto movimenta só a diferença.
+// Regras dos pedidos: só os status de venda (ABERTO, PAGO, ENVIADO — ver STATUS_VENDA
+// em ui.php) seguram estoque. Entrar num deles (criar pedido, aprovar orçamento,
+// reabrir cancelado) baixa o estoque; sair (cancelar, apagar) devolve; editar os itens
+// de um pedido aberto movimenta só a diferença. Orçamentos não mexem no estoque.
 // As funções devem ser chamadas dentro de uma transação ($pdo->beginTransaction()).
 
 /** Tipos de movimento (valor no banco => rótulo na tela). */
@@ -25,14 +28,16 @@ function tipos_movimento(): array
  * registra no histórico. Retorna null se deu certo, ou a mensagem de erro quando
  * a saída deixaria o estoque negativo — nesse caso NADA é alterado.
  */
-function movimentar_estoque(PDO $pdo, int $produtoId, int $quantidade, string $tipo, string $motivo, ?int $pedidoId = null): ?string
-{
+function movimentar_estoque(
+    PDO $pdo, int $produtoId, int $quantidade, string $tipo, string $motivo,
+    ?int $pedidoId = null, ?int $fornecedorId = null, ?float $custoUnitario = null
+): ?string {
     if ($quantidade === 0) {
         return null;
     }
 
     // FOR UPDATE trava a linha do produto até o fim da transação (evita vender o mesmo item duas vezes)
-    $stmt = $pdo->prepare('SELECT NOME, ESTOQUE FROM produtos WHERE ID = ? FOR UPDATE');
+    $stmt = $pdo->prepare('SELECT NOME, ESTOQUE, CUSTO FROM produtos WHERE ID = ? FOR UPDATE');
     $stmt->execute([$produtoId]);
     $produto = $stmt->fetch();
     if (!$produto) {
@@ -44,11 +49,21 @@ function movimentar_estoque(PDO $pdo, int $produtoId, int $quantidade, string $t
         return "{$produto['NOME']} (disponível: {$produto['ESTOQUE']})";
     }
 
-    $pdo->prepare('UPDATE produtos SET ESTOQUE = ? WHERE ID = ?')->execute([$novoEstoque, $produtoId]);
+    // Entrada com custo informado: recalcula o custo médio do produto
+    $novoCusto = $produto['CUSTO'] !== null ? (float)$produto['CUSTO'] : null;
+    if ($quantidade > 0 && $custoUnitario !== null) {
+        $novoCusto = custo_medio((int)$produto['ESTOQUE'], $novoCusto, $quantidade, $custoUnitario);
+    }
+
+    $pdo->prepare('UPDATE produtos SET ESTOQUE = ?, CUSTO = ? WHERE ID = ?')->execute([$novoEstoque, $novoCusto, $produtoId]);
     $pdo->prepare(
-        'INSERT INTO movimentos_estoque (PRODUTO_ID, PEDIDO_ID, USUARIO_ID, TIPO, QUANTIDADE, ESTOQUE_APOS, MOTIVO)
-         VALUES (?, ?, ?, ?, ?, ?, ?)'
-    )->execute([$produtoId, $pedidoId, $_SESSION['usuario_id'] ?? null, $tipo, $quantidade, $novoEstoque, mb_substr($motivo, 0, 255)]);
+        'INSERT INTO movimentos_estoque
+            (PRODUTO_ID, PEDIDO_ID, USUARIO_ID, FORNECEDOR_ID, TIPO, QUANTIDADE, CUSTO_UNITARIO, ESTOQUE_APOS, MOTIVO)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )->execute([
+        $produtoId, $pedidoId, $_SESSION['usuario_id'] ?? null, $fornecedorId, $tipo, $quantidade,
+        $custoUnitario, $novoEstoque, mb_substr($motivo, 0, 255),
+    ]);
 
     return null;
 }
@@ -109,4 +124,40 @@ function ajustar_estoque_pedido(PDO $pdo, int $pedidoId, array $antes, array $de
         }
     }
     return $faltando;
+}
+
+/**
+ * Custo médio ponderado depois de uma entrada.
+ * Ex.: 10 un. a R$ 5,00 + entrada de 10 un. a R$ 7,00 → R$ 6,00.
+ * Sem custo anterior (ou estoque zerado), vale o custo da entrada.
+ */
+function custo_medio(int $estoqueAtual, ?float $custoAtual, int $quantidadeEntrada, float $custoEntrada): float
+{
+    if ($custoAtual === null || $estoqueAtual <= 0) {
+        return round($custoEntrada, 2);
+    }
+    $total = $estoqueAtual * $custoAtual + $quantidadeEntrada * $custoEntrada;
+    return round($total / ($estoqueAtual + $quantidadeEntrada), 2);
+}
+
+/**
+ * Mudança de status de um pedido: baixa ou devolve o estoque conforme o pedido
+ * passa a segurar (ou deixa de segurar) mercadoria. Ex.: orçamento → aberto baixa;
+ * aberto → cancelado devolve; pago → enviado não mexe.
+ * Retorna a lista de produtos sem estoque suficiente (vazia = deu certo).
+ */
+function estoque_mudanca_status(PDO $pdo, int $pedidoId, string $de, string $para): array
+{
+    $antes = status_eh_venda($de);
+    $depois = status_eh_venda($para);
+    if ($antes === $depois) {
+        return [];
+    }
+    $rotulo = status_pedidos()[$para] ?? $para;
+    if ($depois) {
+        $motivo = $de === 'ORCAMENTO' ? "Orçamento #$pedidoId aprovado" : "Pedido #$pedidoId reaberto ($rotulo)";
+        return baixar_estoque($pdo, $pedidoId, $motivo);
+    }
+    devolver_estoque($pdo, $pedidoId, "Pedido #$pedidoId " . ($para === 'CANCELADO' ? 'cancelado' : "virou $rotulo"));
+    return [];
 }

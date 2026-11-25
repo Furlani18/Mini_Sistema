@@ -67,7 +67,7 @@ $ordem = ordenacao([
 // Quantidade e total vendido de TODOS os pedidos filtrados (não só da página atual)
 $stmt = $pdo->prepare(
     "SELECT COUNT(*) AS QTD,
-            COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN p.TOTAL END), 0) AS VENDIDO
+            COALESCE(SUM(CASE WHEN p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO') THEN p.TOTAL END), 0) AS VENDIDO
        FROM vw_pedidos p
       INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
        $where"
@@ -78,6 +78,7 @@ $pag = paginacao((int)$resumo['QTD']);
 
 $stmt = $pdo->prepare(
     "SELECT p.ID, p.STATUS, p.CRIADO_EM, p.ITENS, p.TOTAL, p.DESCONTO,
+            (SELECT COUNT(*) FROM parcelas pa WHERE pa.PEDIDO_ID = p.ID AND pa.PAGO_EM IS NOT NULL) AS RECEBIDAS,
             c.ID AS CLIENTE_ID, c.NOME AS CLIENTE,
             u.NOME AS USUARIO
        FROM vw_pedidos p
@@ -113,7 +114,10 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
             <div class="list-container">
                 <div class="list-header">
                     <h2 class="page-title"><?php echo icone('carrinho'); ?> <?php echo $nomeFiltro ? 'Pedidos de ' . htmlspecialchars($nomeFiltro) : 'Pedidos'; ?></h2>
-                    <a href="<?php echo $linkNovo; ?>" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Pedido</a>
+                    <div class="page-head-acoes">
+                        <a href="<?php echo $linkNovo . ($clienteFiltro ? '&amp;' : '?'); ?>orcamento=1" class="btn btn-outline"><?php echo icone('documento-texto'); ?> Novo Orçamento</a>
+                        <a href="<?php echo $linkNovo; ?>" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Pedido</a>
+                    </div>
                 </div>
 
                 <?php if ($nomeFiltro): ?>
@@ -163,9 +167,10 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                         <p class="no-results is-visible">Nenhum pedido encontrado com esses filtros.</p>
                     <?php else: ?>
                         <p class="text-muted list-total">
-                            Total vendido<?php echo $filtrando || $nomeFiltro ? ' nos pedidos filtrados' : ''; ?> (sem cancelados):
+                            Total vendido<?php echo $filtrando || $nomeFiltro ? ' nos pedidos filtrados' : ''; ?> (sem orçamentos e cancelados):
                             <strong><?php echo moeda((float)$resumo['VENDIDO']); ?></strong>
                         </p>
+                        <?php echo seletor_ordenacao(['id' => 'Número', 'cliente' => 'Cliente', 'status' => 'Status', 'total' => 'Total'], $ordem); ?>
                         <div class="table-responsive">
                             <table class="client-table">
                                 <thead>
@@ -184,7 +189,7 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                                         <tr>
                                             <td class="cell-client">
                                                 <a href="pedido_ver.php?id=<?php echo $p['ID']; ?>" class="client-link">
-                                                    <span class="client-name">Pedido #<?php echo $p['ID']; ?></span>
+                                                    <span class="client-name"><?php echo $p['STATUS'] === 'ORCAMENTO' ? 'Orçamento' : 'Pedido'; ?> #<?php echo $p['ID']; ?></span>
                                                     <span class="client-id"><?php echo date('d/m/Y H:i', strtotime($p['CRIADO_EM'])); ?></span>
                                                 </a>
                                             </td>
@@ -199,14 +204,14 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                                                 <div class="action-buttons">
                                                     <a href="pedido_ver.php?id=<?php echo $p['ID']; ?>" class="btn-icon" title="Ver detalhes"
                                                        aria-label="Ver pedido #<?php echo $p['ID']; ?>"><?php echo icone('olho'); ?></a>
-                                                    <?php if ($p['STATUS'] === 'ABERTO'): ?>
+                                                    <?php if (in_array($p['STATUS'], ['ORCAMENTO', 'ABERTO'], true) && !(int)$p['RECEBIDAS']): ?>
                                                         <a href="pedido_novo.php?id=<?php echo $p['ID']; ?>" class="btn-icon" title="Editar"
                                                            aria-label="Editar pedido #<?php echo $p['ID']; ?>"><?php echo icone('editar'); ?></a>
                                                     <?php endif; ?>
                                                     <?php if (eh_admin()): ?>
                                                         <a href="pedido_apagar.php?id=<?php echo $p['ID']; ?>" class="btn-icon btn-icon-danger" title="Apagar"
                                                            aria-label="Apagar pedido #<?php echo $p['ID']; ?>"
-                                                           data-confirmar-exclusao="o pedido #<?php echo $p['ID']; ?>"><?php echo icone('lixeira'); ?></a>
+                                                           data-lixeira data-confirmar-exclusao="o pedido #<?php echo $p['ID']; ?>"><?php echo icone('lixeira'); ?></a>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>

@@ -18,7 +18,7 @@ $secoesCliente = [
         'email' => [
             'rotulo' => 'Email', 'obrigatorio' => true, 'classe' => 'campo-duplo',
             'atributos' => 'type="email" maxlength="100" placeholder="nome@empresa.com" autocomplete="email"',
-            'ajuda' => 'Usaremos este email para identificar o cadastro.',
+            'ajuda' => 'Identifica o cadastro: dois clientes não podem ter o mesmo email.',
         ],
         'telefone' => [
             'rotulo' => 'Telefone', 'obrigatorio' => false,
@@ -29,6 +29,11 @@ $secoesCliente = [
             'rotulo' => 'CPF ou CNPJ', 'obrigatorio' => false,
             'atributos' => 'type="text" inputmode="numeric" placeholder="000.000.000-00" autocomplete="off" maxlength="18" data-mascara-documento',
             'ajuda' => 'Opcional. Os dígitos verificadores são conferidos.',
+        ],
+        'nascimento' => [
+            'rotulo' => 'Data de nascimento', 'obrigatorio' => false,
+            'atributos' => 'type="date" min="1900-01-01" max="' . date('Y-m-d') . '" autocomplete="bday"',
+            'ajuda' => 'Opcional. O cliente aparece nos aniversariantes do painel.',
         ],
     ],
     'Endereço' => [

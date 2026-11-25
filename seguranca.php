@@ -141,6 +141,9 @@ function acoes_atividade(): array
         'LOGIN'    => 'Entrou',
         'LOGOUT'   => 'Saiu',
         'SENHA'    => 'Senha',
+        'PAGAMENTO' => 'Pagamento',
+        'RESTAUROU' => 'Restaurou',
+        'BACKUP'   => 'Backup',
     ];
 }
 
@@ -152,6 +155,9 @@ function entidades_atividade(): array
         'produto' => 'Produto',
         'pedido'  => 'Pedido',
         'usuario' => 'Usuário',
+        'fornecedor' => 'Fornecedor',
+        'categoria' => 'Categoria',
+        'sistema' => 'Sistema',
     ];
 }
 

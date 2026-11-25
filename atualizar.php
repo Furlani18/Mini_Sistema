@@ -30,10 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$erros) {
         try {
             $stmt = $pdo->prepare(
-                'UPDATE clientes
-                    SET NOME = ?, EMAIL = ?, TELEFONE = ?, CPF_CNPJ = ?, CEP = ?, LOGRADOURO = ?, NUMERO = ?,
-                        COMPLEMENTO = ?, BAIRRO = ?, CIDADE = ?, UF = ?, OBSERVACOES = ?
-                  WHERE ID = ?'
+                'UPDATE clientes SET ' . implode(' = ?, ', CLIENTE_COLUNAS) . ' = ? WHERE ID = ?'
             );
             $stmt->execute([...cliente_para_banco($valores), $id]);
             registrar_atividade($pdo, 'ALTEROU', "Alterou o cliente '{$valores['nome']}'", 'cliente', $id);
@@ -43,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($e->getCode() !== '23000') {
                 throw $e;
             }
-            $erros['cpf_cnpj'] = 'Já existe outro cliente com esse CPF/CNPJ.';
+            $erros = erro_cliente_duplicado($e);
         }
     }
 }

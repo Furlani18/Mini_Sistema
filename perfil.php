@@ -64,10 +64,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $acao === 'senha') {
     }
 
     if (!$errosSenha) {
-        $stmt = $pdo->prepare('UPDATE usuarios SET SENHA = ? WHERE ID = ?');
+        $stmt = $pdo->prepare('UPDATE usuarios SET SENHA = ?, TROCAR_SENHA = 0 WHERE ID = ?');
         $stmt->execute([password_hash($nova, PASSWORD_DEFAULT), $meuId]);
         session_regenerate_id(true);
         registrar_atividade($pdo, 'SENHA', 'Trocou a própria senha', 'usuario', $meuId);
+        if ($_SESSION['trocar_senha']) {
+            // Era a troca obrigatória: libera o sistema e vai para o painel
+            $_SESSION['trocar_senha'] = false;
+            flash('success', 'Senha definida! Bem-vindo ao sistema.');
+            header('Location: index.php');
+            exit;
+        }
         $toasts[] = ['tipo' => 'success', 'mensagem' => 'Senha alterada com sucesso!'];
     }
 }
@@ -135,6 +142,14 @@ $camposSenha = [
                     </ul>
                 </div>
             </section>
+
+            <?php if ($_SESSION['trocar_senha']): ?>
+                <div class="alert alert-warning" role="alert">
+                    <?php echo icone('cadeado'); ?>
+                    <span>Sua senha foi definida por um administrador. <strong>Escolha uma senha nova</strong> em "Alterar senha" para liberar o sistema.
+                        A "senha atual" é a que o administrador passou para você.</span>
+                </div>
+            <?php endif; ?>
 
             <div class="paineis paineis-iguais">
                 <section class="form-container">

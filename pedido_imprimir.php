@@ -2,9 +2,11 @@
 require_once 'auth.php';
 require_once 'conexao.php';
 require_once 'ui.php';
+require_once 'financeiro.php';
 
-// Comprovante do pedido para imprimir ou salvar em PDF ("Salvar como PDF" na janela
-// de impressão do navegador — não precisa de biblioteca extra).
+// Comprovante do pedido (ou do orçamento) para imprimir ou salvar em PDF ("Salvar como PDF"
+// na janela de impressão do navegador — não precisa de biblioteca extra).
+// Se o pedido tiver parcelas, elas aparecem no comprovante.
 //   pedido_imprimir.php?id=ID
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -37,19 +39,31 @@ $stmt = $pdo->prepare(
 $stmt->execute([$id]);
 $itens = $stmt->fetchAll();
 $endereco = endereco_cliente($pedido);
+$parcelas = parcelas_do_pedido($pdo, $id);
+$ehOrcamento = $pedido['STATUS'] === 'ORCAMENTO';
+$nomeDoc = $ehOrcamento ? 'Orçamento' : 'Pedido';
+$validadeOrcamento = date('d/m/Y', strtotime($pedido['CRIADO_EM'] . ' +7 days'));
+
+$primeiroNome = explode(' ', trim($pedido['NOME']))[0];
+$whatsapp = whatsapp_link($pedido['TELEFONE'],
+    "Olá, $primeiroNome! " . ($ehOrcamento ? "Segue o orçamento #$id" : "Segue o comprovante do pedido #$id")
+    . ', no valor de ' . moeda((float)$pedido['TOTAL']) . '. O PDF vai em anexo.');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pedido #<?php echo $pedido['ID']; ?> - Comprovante</title>
+    <title><?php echo $nomeDoc; ?> #<?php echo $pedido['ID']; ?> - Comprovante</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="impressao-body">
     <div class="impressao-barra">
         <a href="pedido_ver.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-outline btn-sm"><?php echo icone('fechar'); ?> Voltar</a>
         <span class="text-muted">Dica: na janela de impressão, escolha “Salvar como PDF” para gerar o arquivo.</span>
+        <?php if ($whatsapp): ?>
+            <a href="<?php echo htmlspecialchars($whatsapp); ?>" class="btn btn-outline btn-sm btn-whatsapp" target="_blank" rel="noopener"><?php echo icone('whatsapp'); ?> Enviar por WhatsApp</a>
+        <?php endif; ?>
         <button type="button" class="btn btn-primary btn-sm" onclick="window.print()"><?php echo icone('impressora'); ?> Imprimir / Salvar PDF</button>
     </div>
 
@@ -59,11 +73,11 @@ $endereco = endereco_cliente($pedido);
                 <span class="brand-mark">CRM</span>
                 <div>
                     <strong>Gestão de Clientes</strong>
-                    <small>Comprovante de pedido</small>
+                    <small><?php echo $ehOrcamento ? 'Orçamento' : 'Comprovante de pedido'; ?></small>
                 </div>
             </div>
             <div class="comprovante-numero">
-                <span>Pedido</span>
+                <span><?php echo $nomeDoc; ?></span>
                 <strong>#<?php echo str_pad((string)$pedido['ID'], 5, '0', STR_PAD_LEFT); ?></strong>
                 <small><?php echo date('d/m/Y \à\s H:i', strtotime($pedido['CRIADO_EM'])); ?></small>
             </div>
@@ -80,8 +94,12 @@ $endereco = endereco_cliente($pedido);
                 <?php if ($endereco): ?><p><?php echo htmlspecialchars($endereco); ?></p><?php endif; ?>
             </div>
             <div>
-                <h3>Pedido</h3>
-                <p>Status: <strong><?php echo status_pedidos()[$pedido['STATUS']]; ?></strong></p>
+                <h3><?php echo $nomeDoc; ?></h3>
+                <?php if ($ehOrcamento): ?>
+                    <p>Válido até: <strong><?php echo $validadeOrcamento; ?></strong></p>
+                <?php else: ?>
+                    <p>Status: <strong><?php echo status_pedidos()[$pedido['STATUS']]; ?></strong></p>
+                <?php endif; ?>
                 <p>Pagamento: <?php echo $pedido['FORMA_PAGAMENTO'] ? formas_pagamento()[$pedido['FORMA_PAGAMENTO']] : 'não informado'; ?></p>
                 <p>Atendente: <?php echo $pedido['USUARIO'] ? htmlspecialchars($pedido['USUARIO']) : '—'; ?></p>
             </div>
@@ -110,12 +128,31 @@ $endereco = endereco_cliente($pedido);
             </tfoot>
         </table>
 
+        <?php if ($parcelas): ?>
+            <table class="comprovante-itens comprovante-parcelas">
+                <thead>
+                    <tr><th>Parcela</th><th>Vencimento</th><th>Situação</th><th class="num">Valor</th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($parcelas as $parc): ?>
+                        <tr>
+                            <td><?php echo (int)$parc['NUMERO']; ?>/<?php echo count($parcelas); ?></td>
+                            <td><?php echo date('d/m/Y', strtotime($parc['VENCIMENTO'])); ?></td>
+                            <td><?php echo $parc['PAGO_EM'] ? 'Recebida em ' . date('d/m/Y', strtotime($parc['PAGO_EM'])) : 'A pagar'; ?></td>
+                            <td class="num"><?php echo moeda((float)$parc['VALOR']); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+
         <?php if ($pedido['OBSERVACAO']): ?>
             <p class="comprovante-obs"><strong>Observação:</strong> <?php echo htmlspecialchars($pedido['OBSERVACAO']); ?></p>
         <?php endif; ?>
 
         <footer class="comprovante-rodape">
             Emitido em <?php echo date('d/m/Y H:i'); ?> · Este documento não tem valor fiscal.
+            <?php if ($ehOrcamento): ?><br>Orçamento sujeito à disponibilidade de estoque. Preços válidos até <?php echo $validadeOrcamento; ?>.<?php endif; ?>
         </footer>
     </article>
 </body>

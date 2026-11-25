@@ -45,6 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
     $senha = trim($_POST['senha'] ?? '');
     $confirmacao = trim($_POST['senha_confirmacao'] ?? '');
+    // Senha definida pelo administrador: por padrão, o usuário precisa trocá-la no próximo acesso
+    $exigirTroca = isset($_POST['trocar_senha']);
 
     $erros = validar_pessoa($valores['nome'], $valores['email'], $valores['telefone'], 'usuário')
         + validar_senha($senha, $confirmacao, !$editando);
@@ -62,21 +64,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($editando) {
                 $sql = 'UPDATE usuarios SET NOME = ?, EMAIL = ?, TELEFONE = ?, PERFIL = ?';
                 if ($senha !== '') {
-                    $sql .= ', SENHA = ?';
+                    $sql .= ', SENHA = ?, TROCAR_SENHA = ?';
                     $dados[] = password_hash($senha, PASSWORD_DEFAULT);
+                    $dados[] = $exigirTroca ? 1 : 0;
                 }
                 $stmt = $pdo->prepare($sql . ' WHERE ID = ?');
                 $stmt->execute([...$dados, $id]);
                 registrar_atividade($pdo, 'ALTEROU', "Alterou o usuário '{$valores['nome']}'"
-                    . ($senha !== '' ? ' (redefiniu a senha)' : ''), 'usuario', $id);
+                    . ($senha !== '' ? ' (redefiniu a senha' . ($exigirTroca ? ', troca obrigatória' : '') . ')' : ''), 'usuario', $id);
                 $usuario['PERFIL'] = $valores['perfil'];
-                $toasts[] = ['tipo' => 'success', 'mensagem' => 'Usuário atualizado' . ($senha !== '' ? ' (senha alterada)' : '') . '!'];
+                $toasts[] = ['tipo' => 'success', 'mensagem' => 'Usuário atualizado'
+                    . ($senha !== '' ? ($exigirTroca ? ' (senha redefinida: ele vai escolher uma nova ao entrar)' : ' (senha alterada)') : '') . '!'];
             } else {
-                $stmt = $pdo->prepare('INSERT INTO usuarios (NOME, EMAIL, TELEFONE, PERFIL, SENHA) VALUES (?, ?, ?, ?, ?)');
-                $stmt->execute([...$dados, password_hash($senha, PASSWORD_DEFAULT)]);
+                $stmt = $pdo->prepare('INSERT INTO usuarios (NOME, EMAIL, TELEFONE, PERFIL, SENHA, TROCAR_SENHA) VALUES (?, ?, ?, ?, ?, ?)');
+                $stmt->execute([...$dados, password_hash($senha, PASSWORD_DEFAULT), $exigirTroca ? 1 : 0]);
                 registrar_atividade($pdo, 'CRIOU', "Criou o usuário '{$valores['nome']}' (" . perfis()[$valores['perfil']] . ')',
                     'usuario', (int)$pdo->lastInsertId());
-                flash('success', "Usuário '{$valores['nome']}' criado. Ele já pode entrar com o email e a senha informados.");
+                flash('success', "Usuário '{$valores['nome']}' criado. Ele já pode entrar com o email e a senha informados"
+                    . ($exigirTroca ? ' e vai escolher uma senha própria no primeiro acesso.' : '.'));
                 header('Location: usuarios.php');
                 exit;
             }
@@ -161,6 +166,18 @@ $titulo = $editando ? 'Editar Usuário' : 'Novo Usuário';
                         </div>
                     </div>
 
+                    <div class="senha-temporaria">
+                        <button type="button" class="btn btn-outline btn-sm" data-gerar-senha><?php echo icone('chave'); ?> Gerar senha temporária</button>
+                        <output class="senha-gerada" data-senha-gerada aria-live="polite"></output>
+                        <label class="checkbox">
+                            <input type="checkbox" name="trocar_senha" value="1" <?php echo $_SERVER['REQUEST_METHOD'] !== 'POST' || isset($_POST['trocar_senha']) ? 'checked' : ''; ?>>
+                            <span>Exigir que <?php echo $editando ? 'ele' : 'o usuário'; ?> troque a senha no próximo acesso</span>
+                        </label>
+                        <small class="field-help"><?php echo $editando
+                            ? 'Para redefinir a senha (ex.: o usuário esqueceu), gere uma senha temporária, salve e passe a senha a ele. Só vale se uma nova senha for informada.'
+                            : 'Recomendado: você passa a senha temporária e ele escolhe uma só dele ao entrar.'; ?></small>
+                    </div>
+
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary"><?php echo icone('salvar'); ?> <?php echo $editando ? 'Salvar Alterações' : 'Criar Usuário'; ?></button>
                         <a href="usuarios.php" class="btn btn-outline"><?php echo icone('lista'); ?> Ver Usuários</a>
@@ -176,5 +193,22 @@ $titulo = $editando ? 'Editar Usuário' : 'Novo Usuário';
         <?php include __DIR__ . '/footer.php'; ?>
     </div>
     <script src="js/formulario.js"></script>
+    <script>
+        // Gera uma senha temporária aleatória (sem caracteres parecidos, como 0/O e 1/l)
+        // e preenche os dois campos de senha, mostrando-a para o administrador anotar.
+        (function () {
+            var botao = document.querySelector('[data-gerar-senha]');
+            if (!botao || !window.crypto) return;
+            botao.addEventListener('click', function () {
+                var letras = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                var aleatorios = new Uint32Array(10);
+                crypto.getRandomValues(aleatorios);
+                var senha = Array.from(aleatorios, function (n) { return letras[n % letras.length]; }).join('');
+                document.getElementById('senha').value = senha;
+                document.getElementById('senha_confirmacao').value = senha;
+                document.querySelector('[data-senha-gerada]').textContent = senha;
+            });
+        })();
+    </script>
 </body>
 </html>

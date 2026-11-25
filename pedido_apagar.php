@@ -3,10 +3,11 @@ require_once 'auth.php';
 require_once 'conexao.php';
 require_once 'ui.php';
 require_once 'estoque.php';
+require_once 'lixeira_funcoes.php';
 
-// Apaga um pedido. Os itens são apagados automaticamente pelo banco
-// (FK_ITENS_PEDIDO com ON DELETE CASCADE). Antes, devolve o estoque
-// (pedidos cancelados já devolveram o estoque ao serem cancelados).
+// Apaga um pedido. Os itens e as parcelas são apagados automaticamente pelo banco
+// (ON DELETE CASCADE). Antes, devolve o estoque (só pedidos de venda seguram estoque:
+// orçamentos nunca baixaram e cancelados já devolveram) e guarda uma cópia na lixeira.
 // Só por POST (botão do modal) e só administradores.
 
 exigir_post('pedidos.php');
@@ -21,14 +22,16 @@ $status = $stmt->fetchColumn();
 if ($status === false) {
     flash('error', 'Pedido não encontrado!');
 } else {
+    $doc = $status === 'ORCAMENTO' ? 'orçamento' : 'pedido';
     $pdo->beginTransaction();
-    if ($status !== 'CANCELADO') {
+    lixeira_guardar($pdo, 'pedido', $id, ucfirst($doc) . " #$id", lixeira_copia($pdo, 'pedido', $id));
+    if (status_eh_venda($status)) {
         devolver_estoque($pdo, $id, "Pedido #$id apagado");
     }
     $pdo->prepare('DELETE FROM pedidos WHERE ID = ?')->execute([$id]);
     $pdo->commit();
-    registrar_atividade($pdo, 'APAGOU', "Apagou o pedido #$id", 'pedido', $id);
-    flash('success', "Pedido #$id removido com sucesso! Os itens foram apagados junto (ON DELETE CASCADE).");
+    registrar_atividade($pdo, 'APAGOU', "Apagou o $doc #$id (foi para a lixeira)", 'pedido', $id);
+    flash('success', ucfirst($doc) . " #$id movido para a lixeira. Itens e parcelas saíram junto (ON DELETE CASCADE).");
 }
 
 header('Location: pedidos.php');

@@ -29,15 +29,16 @@ const COLUNAS_IMPORTACAO = [
     'cidade' => 'cidade', 'municipio' => 'cidade',
     'uf' => 'uf', 'estado' => 'uf',
     'observacoes' => 'observacoes', 'observacao' => 'observacoes', 'obs' => 'observacoes',
+    'nascimento' => 'nascimento', 'datanascimento' => 'nascimento', 'datadenascimento' => 'nascimento', 'aniversario' => 'nascimento',
 ];
 
 if (isset($_GET['modelo'])) {
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="modelo_importacao_clientes.csv"');
     echo "\xEF\xBB\xBF";
-    echo "nome;email;telefone;cpf_cnpj;cep;logradouro;numero;complemento;bairro;cidade;uf;observacoes\r\n";
-    echo "Maria da Silva;maria@exemplo.com;(11) 98888-7777;529.982.247-25;01310-100;Avenida Paulista;1000;Sala 5;Bela Vista;São Paulo;SP;Cliente desde a feira\r\n";
-    echo "Empresa Exemplo Ltda;contato@empresa.com;(21) 3333-4444;11.222.333/0001-81;;;;;;Rio de Janeiro;RJ;\r\n";
+    echo "nome;email;telefone;cpf_cnpj;nascimento;cep;logradouro;numero;complemento;bairro;cidade;uf;observacoes\r\n";
+    echo "Maria da Silva;maria@exemplo.com;(11) 98888-7777;529.982.247-25;15/03/1985;01310-100;Avenida Paulista;1000;Sala 5;Bela Vista;São Paulo;SP;Cliente desde a feira\r\n";
+    echo "Empresa Exemplo Ltda;contato@empresa.com;(21) 3333-4444;11.222.333/0001-81;;;;;;;Rio de Janeiro;RJ;\r\n";
     exit;
 }
 
@@ -112,10 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $emailsExistentes = array_flip(array_map('mb_strtolower', $pdo->query('SELECT EMAIL FROM clientes')->fetchAll(PDO::FETCH_COLUMN)));
             $docsExistentes = array_flip($pdo->query('SELECT CPF_CNPJ FROM clientes WHERE CPF_CNPJ IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN));
 
-            $inserir = $pdo->prepare(
-                'INSERT INTO clientes (NOME, EMAIL, TELEFONE, CPF_CNPJ, CEP, LOGRADOURO, NUMERO, COMPLEMENTO, BAIRRO, CIDADE, UF, OBSERVACOES)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
+            $inserir = $pdo->prepare(sql_inserir_cliente());
             $linhas = [];
             $importados = 0;
             $numeroLinha = 1;
@@ -138,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $valores['uf'] = strtoupper($valores['uf']);
                 $valores['telefone'] = formatar_telefone_importado($valores['telefone']);
+                $valores['nascimento'] = normalizar_data($valores['nascimento']);
 
                 $erros = validar_cliente_completo($valores);
                 $email = mb_strtolower($valores['email']);
@@ -205,7 +204,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <li><strong>Envie o arquivo</strong>. Use “Somente verificar” para conferir antes de gravar.</li>
                 </ol>
                 <p class="text-muted importar-colunas">
-                    Colunas reconhecidas: <code>nome</code>* <code>email</code>* <code>telefone</code> <code>cpf_cnpj</code> <code>cep</code>
+                    Colunas reconhecidas: <code>nome</code>* <code>email</code>* <code>telefone</code> <code>cpf_cnpj</code> <code>nascimento</code> <code>cep</code>
                     <code>logradouro</code> <code>numero</code> <code>complemento</code> <code>bairro</code> <code>cidade</code> <code>uf</code> <code>observacoes</code>
                     · Clientes com email ou CPF/CNPJ já cadastrado são ignorados.
                 </p>

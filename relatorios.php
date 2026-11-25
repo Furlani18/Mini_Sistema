@@ -29,6 +29,8 @@ $produtos = produtos_mais_vendidos($pdo, $periodo);
 $maiorQtd = $produtos ? max(array_map(fn($p) => (int)$p['QUANTIDADE'], $produtos)) : 0;
 $clientes = melhores_clientes($pdo, $periodo);
 $maiorCliente = $clientes ? max(array_map(fn($c) => (float)$c['VALOR'], $clientes)) : 0;
+$categorias = vendas_por_categoria($pdo, $periodo);
+$maiorCategoria = $categorias ? max(array_map(fn($c) => (float)$c['VALOR'], $categorias)) : 0;
 
 /** Variação percentual em relação ao período anterior (null quando não dá para comparar). */
 function variacao(?array $anterior, array $atual, string $campo): ?array
@@ -45,19 +47,28 @@ function variacao(?array $anterior, array $atual, string $campo): ?array
     ];
 }
 
+$plural = fn(int $n, string $um, string $varios) => $n . ' ' . ($n === 1 ? $um : $varios);
+$semCusto = (int)$resumo['ITENS_SEM_CUSTO'];
 $indicadores = [
     ['Faturamento', moeda((float)$resumo['FATURAMENTO']), variacao($anterior, $resumo, 'FATURAMENTO'),
         (float)$resumo['DESCONTOS'] > 0 ? 'Já com ' . moeda((float)$resumo['DESCONTOS']) . ' de descontos' : 'Sem cancelados e descontos'],
     ['Pedidos', (string)(int)$resumo['PEDIDOS'], variacao($anterior, $resumo, 'PEDIDOS'),
-        (int)$resumo['CANCELADOS'] === 1 ? '1 cancelado à parte' : (int)$resumo['CANCELADOS'] . ' cancelados à parte'],
+        $plural((int)$resumo['CANCELADOS'], 'cancelado', 'cancelados') . ' e ' . $plural((int)$resumo['ORCAMENTOS'], 'orçamento', 'orçamentos') . ' à parte'],
     ['Ticket médio', moeda((float)$resumo['TICKET']), variacao($anterior, $resumo, 'TICKET'), 'Valor médio por pedido'],
     ['Itens vendidos', (string)(int)$resumo['ITENS'], variacao($anterior, $resumo, 'ITENS'),
         (int)$resumo['CLIENTES'] === 1 ? '1 cliente comprou' : (int)$resumo['CLIENTES'] . ' clientes compraram'],
+    (float)$resumo['RECEITA_COM_CUSTO'] > 0
+        ? ['Lucro bruto', moeda((float)$resumo['LUCRO']), variacao($anterior, $resumo, 'LUCRO'),
+            'Margem de ' . number_format((float)$resumo['MARGEM'], 1, ',', '.') . '% antes dos descontos'
+            . ($semCusto ? ' · ' . $plural($semCusto, 'item sem custo ficou', 'itens sem custo ficaram') . ' de fora' : '')]
+        : ['Lucro bruto', '—', null, $semCusto
+            ? 'Nenhum item vendido tem custo. Informe o custo no cadastro do produto ou nas entradas de estoque.'
+            : 'Sem vendas no período'],
 ];
 
 $textoPeriodo = date('d/m/Y', strtotime($periodo['de'])) . ' a ' . date('d/m/Y', strtotime($periodo['ate']));
 $queryPeriodo = http_build_query(['de' => $periodo['de'], 'ate' => $periodo['ate']]);
-$coresStatus = ['ABERTO' => 'aberto', 'PAGO' => 'pago', 'ENVIADO' => 'enviado', 'CANCELADO' => 'cancelado'];
+$coresStatus = ['ORCAMENTO' => 'orcamento', 'ABERTO' => 'aberto', 'PAGO' => 'pago', 'ENVIADO' => 'enviado', 'CANCELADO' => 'cancelado'];
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -122,7 +133,7 @@ $coresStatus = ['ABERTO' => 'aberto', 'PAGO' => 'pago', 'ENVIADO' => 'enviado', 
             <section class="painel painel-grafico">
                 <div class="painel-cabecalho">
                     <h3><?php echo icone('grafico'); ?> Faturamento por <?php echo $grafico['porDia'] ? 'dia' : 'mês'; ?></h3>
-                    <span class="text-muted painel-nota">Pedidos cancelados não entram</span>
+                    <span class="text-muted painel-nota">Orçamentos e cancelados não entram</span>
                 </div>
 
                 <?php if ($maiorValor <= 0): ?>
@@ -217,7 +228,7 @@ $coresStatus = ['ABERTO' => 'aberto', 'PAGO' => 'pago', 'ENVIADO' => 'enviado', 
                                 <li class="ranking-item">
                                     <div class="ranking-linha">
                                         <a href="produto_cadastro.php?id=<?php echo $p['ID']; ?>" class="ranking-nome"><?php echo htmlspecialchars($p['NOME']); ?></a>
-                                        <span class="ranking-valor"><strong><?php echo (int)$p['QUANTIDADE']; ?> un.</strong> · <?php echo moeda((float)$p['VALOR']); ?></span>
+                                        <span class="ranking-valor"><strong><?php echo (int)$p['QUANTIDADE']; ?> un.</strong> · <?php echo moeda((float)$p['VALOR']); ?><?php if ($p['LUCRO'] !== null): ?> · <span title="Lucro bruto (preço − custo)">lucro <?php echo moeda((float)$p['LUCRO']); ?></span><?php endif; ?></span>
                                     </div>
                                     <span class="ranking-barra" aria-hidden="true"><span style="width: <?php echo round((int)$p['QUANTIDADE'] / $maiorQtd * 100, 1); ?>%"></span></span>
                                 </li>
@@ -247,6 +258,28 @@ $coresStatus = ['ABERTO' => 'aberto', 'PAGO' => 'pago', 'ENVIADO' => 'enviado', 
                     <?php endif; ?>
                 </section>
             </div>
+
+            <section class="painel">
+                <div class="painel-cabecalho">
+                    <h3><?php echo icone('etiqueta'); ?> Vendas por categoria</h3>
+                    <a href="categorias.php" class="modulo-link">Categorias <span aria-hidden="true">→</span></a>
+                </div>
+                <?php if (!$categorias): ?>
+                    <p class="painel-vazio">Nenhuma venda neste período.</p>
+                <?php else: ?>
+                    <ul class="ranking ranking-colunas">
+                        <?php foreach ($categorias as $cat): ?>
+                            <li class="ranking-item">
+                                <div class="ranking-linha">
+                                    <span class="ranking-nome"><?php echo htmlspecialchars($cat['NOME']); ?></span>
+                                    <span class="ranking-valor"><strong><?php echo moeda((float)$cat['VALOR']); ?></strong> · <?php echo (int)$cat['QUANTIDADE']; ?> un.</span>
+                                </div>
+                                <span class="ranking-barra" aria-hidden="true"><span style="width: <?php echo $maiorCategoria > 0 ? round((float)$cat['VALOR'] / $maiorCategoria * 100, 1) : 0; ?>%"></span></span>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </section>
         </main>
 
         <?php include __DIR__ . '/footer.php'; ?>

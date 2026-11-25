@@ -47,6 +47,18 @@ function icone(string $nome, string $classe = ''): string
         'movimento'     => '<path d="M7 21 3 17l4-4"/><path d="M3 17h18"/><path d="m17 3 4 4-4 4"/><path d="M21 7H3"/>',
         'cartao'        => '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
         'nota'          => '<path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v4a2 2 0 0 0 2 2h4"/>',
+        'etiqueta'      => '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/>',
+        'whatsapp'      => '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1"/>',
+        'caminhao'      => '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+        'alvo'          => '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+        'dinheiro'      => '<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+        'restaurar'     => '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+        'bolo'          => '<path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3"/><path d="M12 8v3"/><path d="M17 8v3"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/>',
+        'codigo-barras' => '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M8 7v10"/><path d="M12 7v10"/><path d="M17 7v10"/>',
+        'engrenagem'    => '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+        'check'         => '<path d="M20 6 9 17l-5-5"/>',
+        'chave'         => '<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/>',
+        'documento-texto' => '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
         'olho'          =>'<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
     ];
 
@@ -147,11 +159,23 @@ function endereco_cliente(array $c): string
 function status_pedidos(): array
 {
     return [
+        'ORCAMENTO' => 'Orçamento',
         'ABERTO'    => 'Aberto',
         'PAGO'      => 'Pago',
         'ENVIADO'   => 'Enviado',
         'CANCELADO' => 'Cancelado',
     ];
+}
+
+/**
+ * Status que "seguram" o estoque e contam como venda. Orçamento e cancelado não:
+ * ao entrar num destes status o estoque é baixado; ao sair, é devolvido.
+ */
+const STATUS_VENDA = ['ABERTO', 'PAGO', 'ENVIADO'];
+
+function status_eh_venda(string $status): bool
+{
+    return in_array($status, STATUS_VENDA, true);
 }
 
 /** Etiqueta colorida com o status do pedido. */
@@ -173,4 +197,49 @@ function flash_pegar(): array
     $mensagens = $_SESSION['flash'] ?? [];
     unset($_SESSION['flash']);
     return $mensagens;
+}
+
+
+/**
+ * Link do WhatsApp (wa.me) para o telefone, já com a mensagem escrita.
+ * Retorna null se o telefone não tiver DDD + número (10 ou 11 dígitos).
+ * Números brasileiros recebem o código do país (55).
+ */
+function whatsapp_link(?string $telefone, string $mensagem = ''): ?string
+{
+    $digitos = preg_replace('/\D/', '', (string)$telefone);
+    if (strlen($digitos) === 12 || strlen($digitos) === 13) {
+        $digitos = str_starts_with($digitos, '55') ? $digitos : '';
+    } elseif (strlen($digitos) === 10 || strlen($digitos) === 11) {
+        $digitos = '55' . $digitos;
+    } else {
+        $digitos = '';
+    }
+    if ($digitos === '') {
+        return null;
+    }
+    return 'https://wa.me/' . $digitos . ($mensagem !== '' ? '?text=' . rawurlencode($mensagem) : '');
+}
+
+/** Lê uma configuração do sistema (tabela configuracoes). */
+function config_ler(PDO $pdo, string $chave, ?string $padrao = null): ?string
+{
+    $stmt = $pdo->prepare('SELECT VALOR FROM configuracoes WHERE CHAVE = ?');
+    $stmt->execute([$chave]);
+    $valor = $stmt->fetchColumn();
+    return $valor === false || $valor === null ? $padrao : (string)$valor;
+}
+
+/** Grava uma configuração do sistema (cria a chave se ainda não existir). */
+function config_gravar(PDO $pdo, string $chave, ?string $valor): void
+{
+    $pdo->prepare('INSERT INTO configuracoes (CHAVE, VALOR) VALUES (?, ?) ON DUPLICATE KEY UPDATE VALOR = VALUES(VALOR)')
+        ->execute([$chave, $valor]);
+}
+
+/** Nome do mês em português (1 = janeiro). */
+function nome_mes(int $mes): string
+{
+    return ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto',
+            'setembro', 'outubro', 'novembro', 'dezembro'][$mes - 1] ?? '';
 }

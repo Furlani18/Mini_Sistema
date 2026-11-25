@@ -20,6 +20,9 @@ $secoes = [
     'usuario_apagar.php'   => 'usuarios.php',
     'cliente_importar.php' => 'clientes.php',
     'produto_cadastro.php' => 'produtos.php',
+    'categorias.php'       => 'produtos.php',
+    'fornecedor_cadastro.php' => 'fornecedores.php',
+    'fornecedor_apagar.php'   => 'fornecedores.php',
     'produto_apagar.php'   => 'produtos.php',
     'produto_estoque.php'  => 'produtos.php',
     'pedido_novo.php'      => 'pedidos.php',
@@ -34,20 +37,27 @@ $menu = [
         'index.php'      => ['home', 'Painel'],
         'relatorios.php' => ['grafico', 'Relatórios'],
     ],
+    'Vendas' => [
+        'pedidos.php'        => ['carrinho', 'Pedidos'],
+        'contas_receber.php' => ['dinheiro', 'Contas a receber'],
+    ],
     'Cadastros' => [
-        'clientes.php' => ['usuarios', 'Clientes'],
-        'produtos.php' => ['pacote', 'Produtos'],
-        'pedidos.php'  => ['carrinho', 'Pedidos'],
+        'clientes.php'     => ['usuarios', 'Clientes'],
+        'produtos.php'     => ['pacote', 'Produtos'],
+        'fornecedores.php' => ['caminhao', 'Fornecedores'],
     ],
     'Administração' => [
         'usuarios.php'        => ['escudo', 'Usuários'],
         'atividades.php'      => ['historico', 'Atividades'],
+        'lixeira.php'         => ['lixeira', 'Lixeira'],
+        'configuracoes.php'   => ['engrenagem', 'Configurações'],
         'relacionamentos.php' => ['banco', 'Banco de dados'],
     ],
 ];
 // Operadores não veem as funções exclusivas de administrador
 if (!eh_admin()) {
-    unset($menu['Administração']['usuarios.php'], $menu['Administração']['atividades.php']);
+    unset($menu['Administração']['usuarios.php'], $menu['Administração']['atividades.php'],
+          $menu['Administração']['lixeira.php'], $menu['Administração']['configuracoes.php']);
 }
 
 $nomeUsuario = $_SESSION['usuario_nome'] ?? '';
@@ -66,6 +76,10 @@ $breadcrumb = $breadcrumb ?? [];
         <span class="brand-mark">CRM</span>
         <span class="brand-text">Gestão de Clientes</span>
     </a>
+
+    <button type="button" class="busca-atalho" data-abrir-busca aria-keyshortcuts="Control+K">
+        <?php echo icone('busca'); ?> <span>Buscar…</span> <kbd>Ctrl K</kbd>
+    </button>
 
     <nav class="sidebar-nav" aria-label="Menu principal">
         <?php // Nomes com prefixo "menu" para não sobrescrever variáveis da página que inclui este arquivo ?>

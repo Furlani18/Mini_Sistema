@@ -101,6 +101,7 @@ function configurarModalExclusao() {
   }
 
   const nome = modal.querySelector("[data-modal-nome]");
+  const aviso = modal.querySelector("[data-modal-aviso]");
   const formulario = modal.querySelector("[data-modal-form]");
   const cancelar = modal.querySelector("[data-modal-cancelar]");
 
@@ -110,6 +111,10 @@ function configurarModalExclusao() {
 
     e.preventDefault();
     nome.textContent = link.dataset.confirmarExclusao || "este registro";
+    // Links com data-lixeira: o registro vai para a lixeira e pode ser restaurado
+    aviso.textContent = link.hasAttribute("data-lixeira")
+      ? "Ele vai para a Lixeira, de onde um administrador pode restaurá-lo."
+      : "Esta ação não pode ser desfeita.";
     formulario.action = link.href; // a página de exclusão só aceita POST com token
     modal.showModal();
     cancelar.focus();

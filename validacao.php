@@ -67,7 +67,7 @@ function validar_senha(string $senha, string $confirmacao, bool $obrigatoria): a
 function cliente_vazio(): array
 {
     return array_fill_keys([
-        'nome', 'email', 'telefone', 'cpf_cnpj', 'cep', 'logradouro', 'numero',
+        'nome', 'email', 'telefone', 'cpf_cnpj', 'nascimento', 'cep', 'logradouro', 'numero',
         'complemento', 'bairro', 'cidade', 'uf', 'observacoes',
     ], '');
 }
@@ -81,6 +81,7 @@ function cliente_do_post(): array
         $valores[$campo] = is_string($valor) ? trim($valor) : '';
     }
     $valores['uf'] = strtoupper($valores['uf']);
+    $valores['nascimento'] = normalizar_data($valores['nascimento']);
     return $valores;
 }
 
@@ -98,7 +99,7 @@ function cliente_do_banco(array $linha): array
 
 /**
  * Valores prontos para gravar, na ordem das colunas:
- * NOME, EMAIL, TELEFONE, CPF_CNPJ, CEP, LOGRADOURO, NUMERO, COMPLEMENTO, BAIRRO, CIDADE, UF, OBSERVACOES.
+ * NOME, EMAIL, TELEFONE, CPF_CNPJ, CEP, LOGRADOURO, NUMERO, COMPLEMENTO, BAIRRO, CIDADE, UF, OBSERVACOES, NASCIMENTO.
  * CPF/CNPJ e CEP só com dígitos; campos opcionais vazios viram NULL.
  */
 function cliente_para_banco(array $v): array
@@ -117,7 +118,39 @@ function cliente_para_banco(array $v): array
         $ouNulo($v['cidade']),
         $ouNulo($v['uf']),
         $ouNulo($v['observacoes']),
+        $ouNulo($v['nascimento']),
     ];
+}
+
+/** Colunas na mesma ordem de cliente_para_banco() (para montar INSERT e UPDATE). */
+const CLIENTE_COLUNAS = ['NOME', 'EMAIL', 'TELEFONE', 'CPF_CNPJ', 'CEP', 'LOGRADOURO', 'NUMERO',
+                         'COMPLEMENTO', 'BAIRRO', 'CIDADE', 'UF', 'OBSERVACOES', 'NASCIMENTO'];
+
+/** SQL de INSERT de cliente com todas as colunas de CLIENTE_COLUNAS. */
+function sql_inserir_cliente(): string
+{
+    return 'INSERT INTO clientes (' . implode(', ', CLIENTE_COLUNAS) . ') VALUES ('
+        . implode(', ', array_fill(0, count(CLIENTE_COLUNAS), '?')) . ')';
+}
+
+/** Mensagem amigável quando o banco recusa um cliente repetido (erro 23000). */
+function erro_cliente_duplicado(PDOException $e): array
+{
+    return str_contains($e->getMessage(), 'UQ_CLIENTES_EMAIL')
+        ? ['email' => 'Já existe um cliente com esse email.']
+        : ['cpf_cnpj' => 'Já existe um cliente com esse CPF/CNPJ.'];
+}
+
+/**
+ * Aceita a data de nascimento como AAAA-MM-DD (campo de data) ou DD/MM/AAAA (planilha).
+ * Retorna AAAA-MM-DD, ou o texto original se não reconhecer (a validação acusa o erro).
+ */
+function normalizar_data(string $texto): string
+{
+    if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})$#', $texto, $m)) {
+        return sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+    }
+    return $texto;
 }
 
 /** Siglas dos estados brasileiros. */
@@ -186,6 +219,13 @@ function validar_cliente_completo(array $v): array
     if ($v['uf'] !== '' && !in_array($v['uf'], ufs(), true)) {
         $erros['uf'] = 'Escolha um estado da lista.';
     }
+    if ($v['nascimento'] !== '') {
+        if (!data_valida($v['nascimento'])) {
+            $erros['nascimento'] = 'Data de nascimento inválida (use DD/MM/AAAA).';
+        } elseif ($v['nascimento'] > date('Y-m-d') || $v['nascimento'] < '1900-01-01') {
+            $erros['nascimento'] = 'A data de nascimento deve estar entre 1900 e hoje.';
+        }
+    }
 
     $limites = ['logradouro' => 150, 'numero' => 20, 'complemento' => 100, 'bairro' => 100, 'cidade' => 100, 'observacoes' => 2000];
     foreach ($limites as $campo => $maximo) {
@@ -195,4 +235,37 @@ function validar_cliente_completo(array $v): array
     }
 
     return $erros;
+}
+
+/* ---------- Produto: SKU e código de barras ---------- */
+
+/** SKU (código interno): letras, números, ponto, hífen e sublinhado, até 40 caracteres. */
+function sku_valido(string $sku): bool
+{
+    return (bool)preg_match('/^[A-Za-z0-9._-]{1,40}$/', $sku);
+}
+
+/**
+ * Código de barras GTIN (EAN-8, UPC-A/12, EAN-13 ou GTIN-14) com dígito verificador.
+ * O último dígito é calculado com pesos 3 e 1 alternados, da direita para a esquerda.
+ */
+function gtin_valido(string $codigo): bool
+{
+    if (!preg_match('/^(\d{8}|\d{12}|\d{13}|\d{14})$/', $codigo)) {
+        return false;
+    }
+    $digitos = array_map('intval', str_split($codigo));
+    $verificador = array_pop($digitos);
+    $soma = 0;
+    foreach (array_reverse($digitos) as $i => $d) {
+        $soma += $d * ($i % 2 === 0 ? 3 : 1);
+    }
+    return (10 - $soma % 10) % 10 === $verificador;
+}
+
+/** Data AAAA-MM-DD válida? */
+function data_valida(string $data): bool
+{
+    $d = DateTime::createFromFormat('!Y-m-d', $data);
+    return $d && $d->format('Y-m-d') === $data;
 }

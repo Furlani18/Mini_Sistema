@@ -19,12 +19,24 @@ $estoque = $_GET['estoque'] ?? '';
 if (!is_string($estoque) || !isset($filtrosEstoque[$estoque])) {
     $estoque = '';
 }
+$categorias = $pdo->query('SELECT ID, NOME FROM categorias ORDER BY NOME')->fetchAll();
+// ?categoria=ID ou ?categoria=sem (produtos sem categoria)
+$categoria = $_GET['categoria'] ?? '';
+if (!is_string($categoria) || ($categoria !== 'sem' && !in_array((int)$categoria, array_map('intval', array_column($categorias, 'ID')), true))) {
+    $categoria = '';
+}
 
 $condicoes = [];
 $parametros = [];
 if ($q !== '') {
-    $condicoes[] = '(pr.NOME LIKE ? OR pr.DESCRICAO LIKE ?)';
-    array_push($parametros, like($q), like($q));
+    $condicoes[] = '(pr.NOME LIKE ? OR pr.DESCRICAO LIKE ? OR pr.SKU LIKE ? OR pr.CODIGO_BARRAS = ?)';
+    array_push($parametros, like($q), like($q), like($q), $q);
+}
+if ($categoria === 'sem') {
+    $condicoes[] = 'pr.CATEGORIA_ID IS NULL';
+} elseif ($categoria !== '') {
+    $condicoes[] = 'pr.CATEGORIA_ID = ?';
+    $parametros[] = (int)$categoria;
 }
 $condicoes[] = match ($estoque) {
     'baixo'  => 'pr.ESTOQUE BETWEEN 1 AND ' . ESTOQUE_BAIXO,
@@ -47,20 +59,21 @@ $stmt->execute($parametros);
 $pag = paginacao((int)$stmt->fetchColumn());
 
 $stmt = $pdo->prepare(
-    "SELECT pr.ID, pr.NOME, pr.DESCRICAO, pr.PRECO, pr.ESTOQUE,
-            COALESCE(SUM(CASE WHEN p.STATUS <> 'CANCELADO' THEN i.QUANTIDADE END), 0) AS VENDIDOS
+    "SELECT pr.ID, pr.NOME, pr.DESCRICAO, pr.PRECO, pr.CUSTO, pr.ESTOQUE, pr.SKU, cat.NOME AS CATEGORIA,
+            COALESCE(SUM(CASE WHEN p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO') THEN i.QUANTIDADE END), 0) AS VENDIDOS
        FROM produtos pr
+       LEFT JOIN categorias cat ON cat.ID = pr.CATEGORIA_ID
        LEFT JOIN itens_pedido i ON i.PRODUTO_ID = pr.ID
        LEFT JOIN pedidos p ON p.ID = i.PEDIDO_ID
        $where
-      GROUP BY pr.ID, pr.NOME, pr.DESCRICAO, pr.PRECO, pr.ESTOQUE
+      GROUP BY pr.ID, pr.NOME, pr.DESCRICAO, pr.PRECO, pr.CUSTO, pr.ESTOQUE, pr.SKU, cat.NOME
       ORDER BY {$ordem['sql']}, pr.ID DESC
       LIMIT {$pag['limite']} OFFSET {$pag['offset']}"
 );
 $stmt->execute($parametros);
 $produtos = $stmt->fetchAll();
 
-$filtrando = $q !== '' || $estoque !== '';
+$filtrando = $q !== '' || $estoque !== '' || $categoria !== '';
 $totalCadastrados = $filtrando ? (int)$pdo->query('SELECT COUNT(*) FROM produtos')->fetchColumn() : $pag['total'];
 ?>
 <!DOCTYPE html>
@@ -79,7 +92,10 @@ $totalCadastrados = $filtrando ? (int)$pdo->query('SELECT COUNT(*) FROM produtos
             <div class="list-container">
                 <div class="list-header">
                     <h2 class="page-title"><?php echo icone('pacote'); ?> Lista de Produtos</h2>
-                    <a href="produto_cadastro.php" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Produto</a>
+                    <div class="page-head-acoes">
+                        <a href="categorias.php" class="btn btn-outline"><?php echo icone('etiqueta'); ?> Categorias</a>
+                        <a href="produto_cadastro.php" class="btn btn-primary"><?php echo icone('plus'); ?> Novo Produto</a>
+                    </div>
                 </div>
 
                 <?php if ($totalCadastrados === 0): ?>
@@ -90,13 +106,23 @@ $totalCadastrados = $filtrando ? (int)$pdo->query('SELECT COUNT(*) FROM produtos
                     </div>
                 <?php else: ?>
                     <form method="get" class="filtros" role="search">
-                        <?php echo campos_ocultos(['q', 'estoque', 'pagina']); ?>
+                        <?php echo campos_ocultos(['q', 'estoque', 'categoria', 'pagina']); ?>
                         <label for="buscaProdutos" class="visually-hidden">Buscar produto</label>
                         <div class="search-input">
                             <?php echo icone('busca'); ?>
                             <input type="search" id="buscaProdutos" name="q" value="<?php echo htmlspecialchars($q); ?>"
-                                   placeholder="Buscar por nome ou descrição" autocomplete="off">
+                                   placeholder="Nome, descrição, SKU ou código de barras" autocomplete="off">
                         </div>
+                        <?php if ($categorias): ?>
+                            <label for="filtroCategoria" class="visually-hidden">Categoria</label>
+                            <select id="filtroCategoria" name="categoria" class="filtro-select" data-auto-submit>
+                                <option value="">Todas as categorias</option>
+                                <?php foreach ($categorias as $cat): ?>
+                                    <option value="<?php echo $cat['ID']; ?>"<?php echo (string)$cat['ID'] === $categoria ? ' selected' : ''; ?>><?php echo htmlspecialchars($cat['NOME']); ?></option>
+                                <?php endforeach; ?>
+                                <option value="sem"<?php echo $categoria === 'sem' ? ' selected' : ''; ?>>Sem categoria</option>
+                            </select>
+                        <?php endif; ?>
                         <label for="filtroEstoque" class="visually-hidden">Situação do estoque</label>
                         <select id="filtroEstoque" name="estoque" class="filtro-select" data-auto-submit>
                             <?php foreach ($filtrosEstoque as $valor => $rotulo): ?>
@@ -112,6 +138,7 @@ $totalCadastrados = $filtrando ? (int)$pdo->query('SELECT COUNT(*) FROM produtos
                     <?php if (!$produtos): ?>
                         <p class="no-results is-visible">Nenhum produto encontrado com esses filtros.</p>
                     <?php else: ?>
+                        <?php echo seletor_ordenacao(['nome' => 'Nome', 'id' => 'Cadastro', 'preco' => 'Preço', 'estoque' => 'Estoque', 'vendidos' => 'Vendidos'], $ordem); ?>
                         <div class="table-responsive">
                             <table class="client-table">
                                 <thead>
@@ -132,11 +159,17 @@ $totalCadastrados = $filtrando ? (int)$pdo->query('SELECT COUNT(*) FROM produtos
                                                     <span class="avatar" aria-hidden="true"><?php echo icone('pacote'); ?></span>
                                                     <span>
                                                         <span class="client-name"><?php echo $nome; ?></span>
-                                                        <span class="client-id">#<?php echo $p['ID']; ?><?php echo $p['DESCRICAO'] ? ' · ' . htmlspecialchars($p['DESCRICAO']) : ''; ?></span>
+                                                        <span class="client-id">#<?php echo $p['ID']; ?><?php echo $p['SKU'] ? ' · SKU ' . htmlspecialchars($p['SKU']) : ''; ?><?php echo $p['DESCRICAO'] ? ' · ' . htmlspecialchars($p['DESCRICAO']) : ''; ?></span>
+                                                        <?php if ($p['CATEGORIA']): ?><span class="badge badge-categoria"><?php echo htmlspecialchars($p['CATEGORIA']); ?></span><?php endif; ?>
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td class="num" data-label="Preço"><?php echo moeda((float)$p['PRECO']); ?></td>
+                                            <td class="num" data-label="Preço">
+                                                <?php echo moeda((float)$p['PRECO']); ?>
+                                                <?php if ($p['CUSTO'] !== null && (float)$p['PRECO'] > 0): ?>
+                                                    <br><small class="text-muted" title="Margem sobre o custo de <?php echo moeda((float)$p['CUSTO']); ?>">margem <?php echo number_format(((float)$p['PRECO'] - (float)$p['CUSTO']) / (float)$p['PRECO'] * 100, 0); ?>%</small>
+                                                <?php endif; ?>
+                                            </td>
                                             <td class="num" data-label="Estoque">
                                                 <?php if ($qtd === 0): ?>
                                                     <span class="estoque-qtd is-zerado">Esgotado</span>
@@ -156,7 +189,7 @@ $totalCadastrados = $filtrando ? (int)$pdo->query('SELECT COUNT(*) FROM produtos
                                                     <?php if (eh_admin()): ?>
                                                     <a href="produto_apagar.php?id=<?php echo $p['ID']; ?>" class="btn-icon btn-icon-danger" title="Apagar"
                                                        aria-label="Apagar <?php echo $nome; ?>"
-                                                       data-confirmar-exclusao="<?php echo $nome; ?>"><?php echo icone('lixeira'); ?></a>
+                                                       data-lixeira data-confirmar-exclusao="<?php echo $nome; ?>"><?php echo icone('lixeira'); ?></a>
                                                     <?php endif; ?>
                                                 </div>
                                             </td>

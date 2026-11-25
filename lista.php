@@ -7,6 +7,7 @@
 //   $pag   = paginacao($totalDeRegistros);
 //   ... ORDER BY {$ordem['sql']} LIMIT {$pag['limite']} OFFSET {$pag['offset']}
 //   echo th_ordenavel('nome', 'Cliente', $ordem);   (no <thead>)
+//   echo seletor_ordenacao(['nome' => 'Cliente'], $ordem);  (celular: as colunas viram cartões)
 //   echo controles_paginacao($pag);                 (abaixo da tabela)
 
 require_once __DIR__ . '/ui.php';
@@ -34,10 +35,15 @@ function link_lista(array $mudancas = []): string
 function ordenacao(array $colunas, string $padrao, string $dirPadrao = 'asc'): array
 {
     $coluna = $_GET['ordem'] ?? $padrao;
+    $dir = $_GET['dir'] ?? $dirPadrao;
+    // O seletor do celular envia coluna e direção juntas: ?ordenar=nome:desc
+    $combinado = $_GET['ordenar'] ?? null;
+    if (is_string($combinado) && str_contains($combinado, ':')) {
+        [$coluna, $dir] = explode(':', $combinado, 2);
+    }
     if (!is_string($coluna) || !isset($colunas[$coluna])) {
         $coluna = $padrao;
     }
-    $dir = $_GET['dir'] ?? $dirPadrao;
     $dir = is_string($dir) && strtolower($dir) === 'desc' ? 'desc' : 'asc';
 
     return [
@@ -54,7 +60,7 @@ function th_ordenavel(string $coluna, string $rotulo, array $ordem, string $clas
     $ativa = $ordem['coluna'] === $coluna;
     // $primeiraDir: direção do primeiro clique (para valores e datas, 'desc' — do maior para o menor)
     $proximaDir = $ativa ? ($ordem['dir'] === 'asc' ? 'desc' : 'asc') : $primeiraDir;
-    $href = link_lista(['ordem' => $coluna, 'dir' => $proximaDir, 'pagina' => null]);
+    $href = link_lista(['ordem' => $coluna, 'dir' => $proximaDir, 'ordenar' => null, 'pagina' => null]);
 
     $ariaSort = $ativa ? ($ordem['dir'] === 'asc' ? 'ascending' : 'descending') : 'none';
     $seta = $ativa ? ($ordem['dir'] === 'asc' ? '↑' : '↓') : '↕';
@@ -63,6 +69,26 @@ function th_ordenavel(string $coluna, string $rotulo, array $ordem, string $clas
     return '<th class="th-ordenavel ' . $classes . '" aria-sort="' . $ariaSort . '">'
         . '<a href="' . $href . '">' . htmlspecialchars($rotulo)
         . ' <span class="sort-seta" aria-hidden="true">' . $seta . '</span></a></th>';
+}
+
+/**
+ * Seletor "Ordenar por" para telas pequenas, onde a tabela vira uma lista de cartões
+ * e os cabeçalhos clicáveis somem. $rotulos = ['coluna' => 'Rótulo', ...] (as mesmas
+ * colunas de ordenacao()). Cada coluna aparece nas duas direções.
+ */
+function seletor_ordenacao(array $rotulos, array $ordem): string
+{
+    $atual = $ordem['coluna'] . ':' . $ordem['dir'];
+    $html = '<form method="get" class="ordenar-celular">' . campos_ocultos(['ordem', 'dir', 'ordenar', 'pagina'])
+        . '<label for="ordenarCelular">Ordenar por</label><select id="ordenarCelular" name="ordenar" class="filtro-select" data-auto-submit>';
+    foreach ($rotulos as $coluna => $rotulo) {
+        foreach (['asc' => '↑ crescente', 'desc' => '↓ decrescente'] as $dir => $texto) {
+            $valor = $coluna . ':' . $dir;
+            $html .= '<option value="' . htmlspecialchars($valor) . '"' . ($valor === $atual ? ' selected' : '') . '>'
+                . htmlspecialchars($rotulo) . ' ' . $texto . '</option>';
+        }
+    }
+    return $html . '</select><noscript><button type="submit" class="btn btn-outline btn-sm">OK</button></noscript></form>';
 }
 
 /** Calcula página atual, total de páginas, LIMIT e OFFSET a partir da URL. */

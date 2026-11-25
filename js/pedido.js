@@ -71,5 +71,58 @@ document.addEventListener("DOMContentLoaded", function () {
   container.addEventListener("input", atualizar);
   container.addEventListener("change", atualizar);
   if (campoDesconto) campoDesconto.addEventListener("input", atualizar);
+
+  // Adicionar por código: digite (ou passe no leitor de código de barras) o SKU ou
+  // o código de barras e tecle Enter. Se o produto já está no pedido, soma 1 unidade.
+  const campoCodigo = document.querySelector("[data-busca-codigo]");
+  const statusCodigo = document.getElementById("buscaCodigoStatus");
+  if (campoCodigo) {
+    campoCodigo.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter") return;
+      e.preventDefault(); // não envia o formulário
+      const codigo = campoCodigo.value.trim().toLowerCase();
+      if (!codigo) return;
+
+      const opcao = Array.from(linhas()[0].querySelectorAll("[data-produto] option")).find(function (o) {
+        return o.dataset.codigos && o.dataset.codigos.split(" ").indexOf(codigo) !== -1;
+      });
+      if (!opcao) {
+        statusCodigo.textContent = "Nenhum produto com o código “" + campoCodigo.value.trim() + "”.";
+        statusCodigo.classList.add("is-erro");
+        campoCodigo.select();
+        return;
+      }
+
+      const existente = linhas().find(function (l) { return l.querySelector("[data-produto]").value === opcao.value; });
+      if (existente) {
+        const qtd = existente.querySelector("[data-quantidade]");
+        qtd.value = (parseInt(qtd.value, 10) || 0) + 1;
+      } else {
+        // Usa uma linha vazia, se houver; senão, cria uma nova
+        let linha = linhas().find(function (l) { return !l.querySelector("[data-produto]").value; });
+        if (!linha) {
+          botaoAdicionar.click();
+          linha = linhas()[linhas().length - 1];
+        }
+        linha.querySelector("[data-produto]").value = opcao.value;
+        linha.querySelector("[data-quantidade]").value = "1";
+      }
+      statusCodigo.textContent = "Adicionado: " + opcao.textContent.trim().split(" — ")[0];
+      statusCodigo.classList.remove("is-erro");
+      campoCodigo.value = "";
+      campoCodigo.focus();
+      atualizar();
+    });
+  }
+
+  // Botão de salvar acompanha o status escolhido (orçamento x pedido)
+  const status = document.querySelector("[data-status-pedido]");
+  const rotuloSalvar = document.querySelector("[data-rotulo-salvar]");
+  if (status && rotuloSalvar) {
+    status.addEventListener("change", function () {
+      rotuloSalvar.textContent = status.value === "ORCAMENTO" ? "Salvar Orçamento" : "Registrar Pedido";
+    });
+  }
+
   atualizar();
 });

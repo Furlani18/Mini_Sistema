@@ -3,10 +3,18 @@ require_once 'auth.php';
 require_once 'conexao.php';
 require_once 'ui.php';
 require_once 'estoque.php';
+require_once 'financeiro.php';
 
-// Detalhes de um pedido: dados do pedido + cliente + usuário (JOINs) e a lista
-// de itens com os produtos (itens_pedido ⨝ produtos). Também permite mudar o status.
+// Detalhes de um pedido (ou orçamento): dados do pedido + cliente + usuário (JOINs),
+// itens com os produtos (itens_pedido ⨝ produtos), mudança de status e parcelas.
 // Os totais vêm da visão vw_pedidos (SUBTOTAL - DESCONTO = TOTAL).
+//
+// Ações (POST, campo "acao"):
+//   status          → muda o status (baixa/devolve estoque quando preciso)
+//   gerar_parcelas  → divide o total em parcelas
+//   refazer         → apaga as parcelas (só se nenhuma foi recebida)
+//   receber         → registra o recebimento de uma parcela
+//   estornar        → desfaz o recebimento de uma parcela
 
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
@@ -28,38 +36,116 @@ if (!$pedido) {
     exit;
 }
 
-// Mudança de status (cancelar devolve o estoque; sair de "cancelado" baixa de novo)
+$ehOrcamento = $pedido['STATUS'] === 'ORCAMENTO';
+$nomeDoc = $ehOrcamento ? 'Orçamento' : 'Pedido';
+$parcelas = parcelas_do_pedido($pdo, $id);
+$algumaRecebida = (bool)array_filter($parcelas, fn($p) => $p['PAGO_EM'] !== null);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $novo = (string)($_POST['status'] ?? '');
-    $atual = $pedido['STATUS'];
+    $acao = (string)($_POST['acao'] ?? 'status');
 
-    if (!isset(status_pedidos()[$novo])) {
-        flash('error', 'Status inválido.');
-    } elseif ($novo !== $atual) {
-        $pdo->beginTransaction();
-        $faltando = [];
-        if ($novo === 'CANCELADO') {
-            devolver_estoque($pdo, $id, "Pedido #$id cancelado");
-        } elseif ($atual === 'CANCELADO') {
-            $faltando = baixar_estoque($pdo, $id, "Pedido #$id reaberto");
+    if ($acao === 'status') {
+        $novo = (string)($_POST['status'] ?? '');
+        $atual = $pedido['STATUS'];
+
+        if (!isset(status_pedidos()[$novo])) {
+            flash('error', 'Status inválido.');
+        } elseif ($novo === 'ORCAMENTO' && $atual !== 'ORCAMENTO') {
+            flash('error', 'Um pedido não pode voltar a ser orçamento. Cancele-o e crie um novo orçamento.');
+        } elseif ($novo !== $atual) {
+            $pdo->beginTransaction();
+            $faltando = estoque_mudanca_status($pdo, $id, $atual, $novo);
+            if ($faltando) {
+                $pdo->rollBack();
+                flash('error', 'Não foi possível mudar o status. Estoque insuficiente para: ' . implode(', ', $faltando) . '.');
+            } else {
+                $pdo->prepare('UPDATE pedidos SET STATUS = ? WHERE ID = ?')->execute([$novo, $id]);
+                $pdo->commit();
+                if ($atual === 'ORCAMENTO' && status_eh_venda($novo)) {
+                    registrar_atividade($pdo, 'ALTEROU', "Aprovou o orçamento #$id (virou pedido " . status_pedidos()[$novo] . ')', 'pedido', $id);
+                    flash('success', "Orçamento aprovado! Agora é o pedido #$id e o estoque foi baixado.");
+                } else {
+                    registrar_atividade($pdo, 'ALTEROU', "$nomeDoc #$id: status de " . status_pedidos()[$atual] . ' para ' . status_pedidos()[$novo], 'pedido', $id);
+                    flash('success', 'Status alterado para "' . status_pedidos()[$novo] . '".');
+                }
+            }
         }
+    } elseif ($acao === 'gerar_parcelas') {
+        $quantidade = (int)($_POST['quantidade'] ?? 0);
+        $intervalo = (int)($_POST['intervalo'] ?? 30);
+        $primeiro = (string)($_POST['primeiro_vencimento'] ?? '');
+        $forma = (string)($_POST['forma_pagamento'] ?? '');
+        $data = DateTime::createFromFormat('!Y-m-d', $primeiro);
 
-        if ($faltando) {
-            $pdo->rollBack();
-            flash('error', 'Não foi possível reabrir o pedido. Estoque insuficiente para: ' . implode(', ', $faltando) . '.');
+        if (!status_eh_venda($pedido['STATUS'])) {
+            flash('error', 'Só pedidos de venda (não orçamentos nem cancelados) recebem parcelas.');
+        } elseif ($parcelas) {
+            flash('error', 'Este pedido já tem parcelas.');
+        } elseif ((float)$pedido['TOTAL'] <= 0) {
+            flash('error', 'O pedido não tem valor a receber.');
+        } elseif ($quantidade < 1 || $quantidade > PARCELAS_MAXIMO || !in_array($intervalo, [7, 15, 30], true)) {
+            flash('error', 'Escolha de 1 a ' . PARCELAS_MAXIMO . ' parcelas e um intervalo válido.');
+        } elseif (!$data || $data->format('Y-m-d') !== $primeiro) {
+            flash('error', 'Informe a data do primeiro vencimento.');
+        } elseif ($forma !== '' && !isset(formas_pagamento()[$forma])) {
+            flash('error', 'Forma de pagamento inválida.');
+        } elseif ((float)$pedido['TOTAL'] / $quantidade < 0.01) {
+            flash('error', 'O valor de cada parcela ficaria menor que R$ 0,01.');
         } else {
-            $pdo->prepare('UPDATE pedidos SET STATUS = ? WHERE ID = ?')->execute([$novo, $id]);
+            $inserir = $pdo->prepare('INSERT INTO parcelas (PEDIDO_ID, NUMERO, VALOR, VENCIMENTO, FORMA_PAGAMENTO) VALUES (?, ?, ?, ?, ?)');
+            $pdo->beginTransaction();
+            foreach (dividir_parcelas((float)$pedido['TOTAL'], $quantidade, $primeiro, $intervalo) as $parcela) {
+                $inserir->execute([$id, $parcela['numero'], $parcela['valor'], $parcela['vencimento'], $forma ?: null]);
+            }
+            if ($forma !== '' && !$pedido['FORMA_PAGAMENTO']) {
+                $pdo->prepare('UPDATE pedidos SET FORMA_PAGAMENTO = ? WHERE ID = ?')->execute([$forma, $id]);
+            }
             $pdo->commit();
-            registrar_atividade($pdo, 'ALTEROU', "Pedido #$id: status de " . status_pedidos()[$atual] . ' para ' . status_pedidos()[$novo], 'pedido', $id);
-            flash('success', 'Status alterado para "' . status_pedidos()[$novo] . '".');
+            registrar_atividade($pdo, 'PAGAMENTO', "Pedido #$id dividido em {$quantidade}x de " . moeda((float)$pedido['TOTAL'] / $quantidade), 'pedido', $id);
+            flash('success', $quantidade === 1 ? 'Parcela única criada.' : "Pedido dividido em {$quantidade} parcelas.");
+        }
+    } elseif ($acao === 'refazer') {
+        if ($algumaRecebida) {
+            flash('error', 'Há parcelas já recebidas. Estorne os recebimentos antes de refazer as parcelas.');
+        } else {
+            $pdo->prepare('DELETE FROM parcelas WHERE PEDIDO_ID = ?')->execute([$id]);
+            registrar_atividade($pdo, 'PAGAMENTO', "Apagou as parcelas do pedido #$id para refazer", 'pedido', $id);
+            flash('success', 'Parcelas apagadas. Defina a nova divisão.');
+        }
+    } elseif ($acao === 'receber' || $acao === 'estornar') {
+        $parcelaId = (int)($_POST['parcela_id'] ?? 0);
+        $parcela = current(array_filter($parcelas, fn($p) => (int)$p['ID'] === $parcelaId)) ?: null;
+
+        if (!$parcela) {
+            flash('error', 'Parcela não encontrada.');
+        } elseif ($acao === 'receber') {
+            $pagoEm = (string)($_POST['pago_em'] ?? date('Y-m-d'));
+            $forma = (string)($_POST['forma_pagamento'] ?? '');
+            $data = DateTime::createFromFormat('!Y-m-d', $pagoEm);
+            if (!$data || $data->format('Y-m-d') !== $pagoEm || $pagoEm > date('Y-m-d')) {
+                flash('error', 'Informe a data do recebimento (hoje ou antes).');
+            } elseif ($forma !== '' && !isset(formas_pagamento()[$forma])) {
+                flash('error', 'Forma de pagamento inválida.');
+            } else {
+                $pdo->prepare('UPDATE parcelas SET PAGO_EM = ?, FORMA_PAGAMENTO = COALESCE(?, FORMA_PAGAMENTO) WHERE ID = ?')
+                    ->execute([$pagoEm, $forma ?: null, $parcelaId]);
+                $quitou = marcar_pedido_pago_se_quitado($pdo, $id);
+                registrar_atividade($pdo, 'PAGAMENTO', "Recebeu a parcela {$parcela['NUMERO']} do pedido #$id (" . moeda((float)$parcela['VALOR']) . ')', 'pedido', $id);
+                flash('success', 'Recebimento registrado.' . ($quitou ? ' Pedido quitado: status alterado para "Pago".' : ''));
+            }
+        } else {
+            $pdo->prepare('UPDATE parcelas SET PAGO_EM = NULL WHERE ID = ?')->execute([$parcelaId]);
+            registrar_atividade($pdo, 'PAGAMENTO', "Estornou o recebimento da parcela {$parcela['NUMERO']} do pedido #$id", 'pedido', $id);
+            flash('success', 'Recebimento desfeito.');
         }
     }
+
     header('Location: pedido_ver.php?id=' . $id);
     exit;
 }
 
 $stmt = $pdo->prepare(
-    'SELECT pr.ID AS PRODUTO_ID, pr.NOME AS PRODUTO, i.QUANTIDADE, i.PRECO_UNITARIO,
+    'SELECT pr.ID AS PRODUTO_ID, pr.NOME AS PRODUTO, pr.SKU, i.QUANTIDADE, i.PRECO_UNITARIO,
             i.QUANTIDADE * i.PRECO_UNITARIO AS SUBTOTAL
        FROM itens_pedido i
       INNER JOIN produtos pr ON pr.ID = i.PRODUTO_ID
@@ -68,30 +154,72 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute([$id]);
 $itens = $stmt->fetchAll();
+
+// Resumo das parcelas
+$recebido = array_sum(array_map(fn($p) => $p['PAGO_EM'] !== null ? (float)$p['VALOR'] : 0, $parcelas));
+$aReceber = array_sum(array_map(fn($p) => $p['PAGO_EM'] === null ? (float)$p['VALOR'] : 0, $parcelas));
+
+// Mensagem pronta para o WhatsApp do cliente
+$primeiroNome = explode(' ', trim($pedido['CLIENTE']))[0];
+$linhasItens = array_map(fn($i) => '• ' . (int)$i['QUANTIDADE'] . 'x ' . $i['PRODUTO'] . ' — ' . moeda((float)$i['SUBTOTAL']), $itens);
+$mensagemWhats = "Olá, $primeiroNome! "
+    . ($ehOrcamento ? "Segue o seu orçamento #$id:" : "Aqui está o resumo do seu pedido #$id:") . "\n\n"
+    . implode("\n", $linhasItens)
+    . ((float)$pedido['DESCONTO'] > 0 ? "\nDesconto: − " . moeda((float)$pedido['DESCONTO']) : '')
+    . "\n*Total: " . moeda((float)$pedido['TOTAL']) . '*'
+    . ($ehOrcamento ? "\n\nQualquer dúvida, é só responder esta mensagem." : "\nStatus: " . status_pedidos()[$pedido['STATUS']]);
+$linkWhats = whatsapp_link($pedido['CLIENTE_TELEFONE'], $mensagemWhats);
+
+// Opções do seletor de status: "Orçamento" só aparece enquanto o pedido ainda é um orçamento
+$opcoesStatus = status_pedidos();
+if (!$ehOrcamento) {
+    unset($opcoesStatus['ORCAMENTO']);
+}
+$podeEditar = in_array($pedido['STATUS'], ['ORCAMENTO', 'ABERTO'], true) && !$algumaRecebida; // parcela recebida congela o pedido
+$hoje = date('Y-m-d');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pedido #<?php echo $pedido['ID']; ?></title>
+    <title><?php echo $nomeDoc; ?> #<?php echo $pedido['ID']; ?></title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="container">
-        <?php $breadcrumb = ['Pedidos' => 'pedidos.php', 'Pedido #' . $pedido['ID'] => null]; include __DIR__ . '/header.php'; ?>
+        <?php $breadcrumb = ['Pedidos' => 'pedidos.php', $nomeDoc . ' #' . $pedido['ID'] => null]; include __DIR__ . '/header.php'; ?>
 
         <main>
             <div class="list-container">
                 <div class="list-header">
-                    <h2 class="page-title"><?php echo icone('carrinho'); ?> Pedido <span class="page-title-id">#<?php echo $pedido['ID']; ?></span> <?php echo badge_status($pedido['STATUS']); ?></h2>
+                    <h2 class="page-title"><?php echo icone($ehOrcamento ? 'documento-texto' : 'carrinho'); ?> <?php echo $nomeDoc; ?> <span class="page-title-id">#<?php echo $pedido['ID']; ?></span> <?php echo badge_status($pedido['STATUS']); ?></h2>
                     <div class="page-head-acoes">
+                        <?php if ($linkWhats): ?>
+                            <a href="<?php echo htmlspecialchars($linkWhats); ?>" class="btn btn-outline btn-whatsapp" target="_blank" rel="noopener"><?php echo icone('whatsapp'); ?> WhatsApp</a>
+                        <?php endif; ?>
                         <a href="pedido_imprimir.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-outline" target="_blank" rel="noopener"><?php echo icone('impressora'); ?> Imprimir / PDF</a>
-                        <?php if ($pedido['STATUS'] === 'ABERTO'): ?>
-                            <a href="pedido_novo.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-primary"><?php echo icone('editar'); ?> Editar Pedido</a>
+                        <?php if ($podeEditar): ?>
+                            <a href="pedido_novo.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-outline"><?php echo icone('editar'); ?> Editar</a>
+                        <?php endif; ?>
+                        <?php if ($ehOrcamento): ?>
+                            <form method="POST" action="pedido_ver.php?id=<?php echo $pedido['ID']; ?>" class="form-inline">
+                                <?php echo csrf_campo(); ?>
+                                <input type="hidden" name="acao" value="status">
+                                <input type="hidden" name="status" value="ABERTO">
+                                <button type="submit" class="btn btn-primary"><?php echo icone('check'); ?> Aprovar orçamento</button>
+                            </form>
                         <?php endif; ?>
                     </div>
                 </div>
+
+                <?php if ($ehOrcamento): ?>
+                    <div class="alert alert-info">
+                        <?php echo icone('documento-texto'); ?>
+                        <span>Este é um <strong>orçamento</strong>: não reserva estoque e não conta como venda.
+                            Ao aprovar, ele vira um pedido "Aberto" e o estoque é baixado.</span>
+                    </div>
+                <?php endif; ?>
 
                 <dl class="detalhes">
                     <div>
@@ -135,7 +263,7 @@ $itens = $stmt->fetchAll();
                                 <tr>
                                     <td class="cell-client">
                                         <span class="client-name"><?php echo htmlspecialchars($item['PRODUTO']); ?></span>
-                                        <span class="client-id">#<?php echo $item['PRODUTO_ID']; ?></span>
+                                        <span class="client-id">#<?php echo $item['PRODUTO_ID']; ?><?php echo $item['SKU'] ? ' · SKU ' . htmlspecialchars($item['SKU']) : ''; ?></span>
                                     </td>
                                     <td class="num" data-label="Quantidade"><?php echo (int)$item['QUANTIDADE']; ?></td>
                                     <td class="num" data-label="Preço unitário"><?php echo moeda((float)$item['PRECO_UNITARIO']); ?></td>
@@ -165,11 +293,119 @@ $itens = $stmt->fetchAll();
                     </table>
                 </div>
 
+                <?php if (status_eh_venda($pedido['STATUS']) || $parcelas): ?>
+                    <section class="parcelas" aria-labelledby="tituloParcelas">
+                        <div class="list-header">
+                            <h3 class="section-title" id="tituloParcelas"><?php echo icone('dinheiro'); ?> Pagamento e parcelas <small class="text-muted">(tabela parcelas)</small></h3>
+                            <?php if ($parcelas): ?>
+                                <p class="parcelas-resumo">
+                                    <span>Recebido <strong><?php echo moeda($recebido); ?></strong></span>
+                                    <span>A receber <strong><?php echo moeda($aReceber); ?></strong></span>
+                                </p>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if (!$parcelas): ?>
+                            <form method="POST" action="pedido_ver.php?id=<?php echo $pedido['ID']; ?>" class="parcelas-gerar">
+                                <?php echo csrf_campo(); ?>
+                                <input type="hidden" name="acao" value="gerar_parcelas">
+                                <p class="text-muted">Defina como o cliente vai pagar os <?php echo moeda((float)$pedido['TOTAL']); ?>. As parcelas aparecem em <a href="contas_receber.php" class="text-link">Contas a receber</a>.</p>
+                                <div class="parcelas-campos">
+                                    <div class="form-group">
+                                        <label for="quantidadeParcelas">Parcelas</label>
+                                        <select id="quantidadeParcelas" name="quantidade">
+                                            <?php for ($n = 1; $n <= PARCELAS_MAXIMO; $n++): ?>
+                                                <option value="<?php echo $n; ?>"><?php echo $n === 1 ? 'À vista (1x)' : $n . 'x de ' . moeda((float)$pedido['TOTAL'] / $n); ?></option>
+                                            <?php endfor; ?>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="primeiroVencimento">1º vencimento</label>
+                                        <input type="date" id="primeiroVencimento" name="primeiro_vencimento" value="<?php echo $hoje; ?>" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="intervaloParcelas">Intervalo</label>
+                                        <select id="intervaloParcelas" name="intervalo">
+                                            <option value="30">Mensal (30 dias)</option>
+                                            <option value="15">Quinzenal (15 dias)</option>
+                                            <option value="7">Semanal (7 dias)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="formaParcelas">Forma</label>
+                                        <select id="formaParcelas" name="forma_pagamento">
+                                            <option value="">Não informada</option>
+                                            <?php foreach (formas_pagamento() as $valor => $rotulo): ?>
+                                                <option value="<?php echo $valor; ?>" <?php echo $valor === $pedido['FORMA_PAGAMENTO'] ? 'selected' : ''; ?>><?php echo $rotulo; ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary"><?php echo icone('check'); ?> Gerar parcelas</button>
+                                </div>
+                            </form>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="client-table tabela-parcelas">
+                                    <thead>
+                                        <tr>
+                                            <th>Parcela</th>
+                                            <th>Vencimento</th>
+                                            <th>Situação</th>
+                                            <th class="num">Valor</th>
+                                            <th class="col-actions"><span class="visually-hidden">Ações</span></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($parcelas as $parc): ?>
+                                            <?php $situacao = situacao_parcela($parc); ?>
+                                            <tr>
+                                                <td class="cell-client">
+                                                    <span class="client-name"><?php echo (int)$parc['NUMERO']; ?>/<?php echo count($parcelas); ?></span>
+                                                    <span class="client-id"><?php echo $parc['FORMA_PAGAMENTO'] ? formas_pagamento()[$parc['FORMA_PAGAMENTO']] : 'Forma não informada'; ?></span>
+                                                </td>
+                                                <td data-label="Vencimento"><?php echo date('d/m/Y', strtotime($parc['VENCIMENTO'])); ?></td>
+                                                <td data-label="Situação">
+                                                    <?php echo badge_parcela($situacao); ?>
+                                                    <?php if ($parc['PAGO_EM']): ?><small class="text-muted">em <?php echo date('d/m/Y', strtotime($parc['PAGO_EM'])); ?></small><?php endif; ?>
+                                                </td>
+                                                <td class="num" data-label="Valor"><?php echo moeda((float)$parc['VALOR']); ?></td>
+                                                <td class="col-actions">
+                                                    <form method="POST" action="pedido_ver.php?id=<?php echo $pedido['ID']; ?>" class="parcela-acao">
+                                                        <?php echo csrf_campo(); ?>
+                                                        <input type="hidden" name="parcela_id" value="<?php echo $parc['ID']; ?>">
+                                                        <?php if ($parc['PAGO_EM']): ?>
+                                                            <input type="hidden" name="acao" value="estornar">
+                                                            <button type="submit" class="btn btn-outline btn-sm"><?php echo icone('restaurar'); ?> Estornar</button>
+                                                        <?php else: ?>
+                                                            <input type="hidden" name="acao" value="receber">
+                                                            <label class="visually-hidden" for="pagoEm<?php echo $parc['ID']; ?>">Data do recebimento</label>
+                                                            <input type="date" id="pagoEm<?php echo $parc['ID']; ?>" name="pago_em" value="<?php echo $hoje; ?>" max="<?php echo $hoje; ?>" class="input-sm">
+                                                            <button type="submit" class="btn btn-primary btn-sm"><?php echo icone('check'); ?> Receber</button>
+                                                        <?php endif; ?>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <?php if (!$algumaRecebida): ?>
+                                <form method="POST" action="pedido_ver.php?id=<?php echo $pedido['ID']; ?>" class="parcelas-refazer">
+                                    <?php echo csrf_campo(); ?>
+                                    <input type="hidden" name="acao" value="refazer">
+                                    <button type="submit" class="btn-limpar"><?php echo icone('restaurar'); ?> Refazer parcelas</button>
+                                </form>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </section>
+                <?php endif; ?>
+
                 <form method="POST" action="pedido_ver.php?id=<?php echo $pedido['ID']; ?>" class="status-form">
                     <?php echo csrf_campo(); ?>
+                    <input type="hidden" name="acao" value="status">
                     <label for="status">Alterar status:</label>
                     <select id="status" name="status">
-                        <?php foreach (status_pedidos() as $valor => $rotulo): ?>
+                        <?php foreach ($opcoesStatus as $valor => $rotulo): ?>
                             <option value="<?php echo $valor; ?>" <?php echo $valor === $pedido['STATUS'] ? 'selected' : ''; ?>><?php echo $rotulo; ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -179,8 +415,8 @@ $itens = $stmt->fetchAll();
                 <div class="form-actions">
                     <a href="pedidos.php" class="btn btn-outline"><?php echo icone('lista'); ?> Ver Pedidos</a>
                     <?php if (eh_admin()): ?>
-                        <a href="pedido_apagar.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-danger-outline"
-                           data-confirmar-exclusao="o pedido #<?php echo $pedido['ID']; ?>"><?php echo icone('lixeira'); ?> Apagar Pedido</a>
+                        <a href="pedido_apagar.php?id=<?php echo $pedido['ID']; ?>" class="btn btn-danger-outline" data-lixeira
+                           data-confirmar-exclusao="o <?php echo mb_strtolower($nomeDoc); ?> #<?php echo $pedido['ID']; ?>"><?php echo icone('lixeira'); ?> Apagar <?php echo $nomeDoc; ?></a>
                     <?php endif; ?>
                 </div>
             </div>
