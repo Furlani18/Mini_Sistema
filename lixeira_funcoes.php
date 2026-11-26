@@ -150,3 +150,18 @@ function lixeira_restaurar(PDO $pdo, array $item): ?string
     }
     return 'Tipo de registro desconhecido.';
 }
+
+/**
+ * Apaga do disco as fotos dos produtos que vão ser excluídos de vez da lixeira
+ * ($id = um item; null = a lixeira inteira). Chame ANTES de apagar as linhas.
+ */
+function lixeira_apagar_fotos(PDO $pdo, ?int $id = null): void
+{
+    require_once __DIR__ . '/loja_funcoes.php';
+    $stmt = $pdo->prepare("SELECT DADOS FROM lixeira WHERE ENTIDADE = 'produto'" . ($id !== null ? ' AND ID = ?' : ''));
+    $stmt->execute($id !== null ? [$id] : []);
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $json) {
+        $dados = json_decode((string)$json, true);
+        foto_apagar($dados['produtos']['FOTO'] ?? null);
+    }
+}

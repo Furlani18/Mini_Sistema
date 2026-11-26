@@ -20,6 +20,7 @@ require_once __DIR__ . '/../validacao.php';
 require_once __DIR__ . '/../financeiro.php';
 require_once __DIR__ . '/../estoque.php';
 require_once __DIR__ . '/../lixeira_funcoes.php';
+require_once __DIR__ . '/../loja_funcoes.php';
 
 final class FalhaTeste extends Exception {}
 

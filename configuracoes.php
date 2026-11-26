@@ -2,8 +2,9 @@
 require_once 'auth.php';
 require_once 'conexao.php';
 require_once 'ui.php';
+require_once 'loja_funcoes.php';
 
-// Configurações do sistema (tabela configuracoes) e backup do banco.
+// Configurações do sistema (tabela configuracoes): meta de vendas, loja online e backup do banco.
 // Somente administradores.
 
 exigir_admin();
@@ -12,8 +13,36 @@ $erros = [];
 $toasts = [];
 $meta = config_ler($pdo, 'meta_mensal');
 $valorMeta = $meta !== null && (float)$meta > 0 ? number_format((float)$meta, 2, ',', '.') : '';
+$loja = loja_config($pdo);
+$valoresLoja = ['ativa' => $loja['ativa'], 'nome' => $loja['nome'], 'slogan' => $loja['slogan'], 'whatsapp' => $loja['whatsapp']];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['acao'] ?? '') === 'loja') {
+    $valoresLoja = [
+        'ativa'    => isset($_POST['loja_ativa']),
+        'nome'     => trim((string)($_POST['loja_nome'] ?? '')),
+        'slogan'   => trim((string)($_POST['loja_slogan'] ?? '')),
+        'whatsapp' => trim((string)($_POST['loja_whatsapp'] ?? '')),
+    ];
+    if (mb_strlen($valoresLoja['nome']) < 2 || mb_strlen($valoresLoja['nome']) > 60) {
+        $erros['loja_nome'] = 'Informe o nome da loja (de 2 a 60 caracteres).';
+    }
+    if (mb_strlen($valoresLoja['slogan']) > 160) {
+        $erros['loja_slogan'] = 'O slogan pode ter até 160 caracteres.';
+    }
+    if ($valoresLoja['whatsapp'] !== '' && whatsapp_link($valoresLoja['whatsapp']) === null) {
+        $erros['loja_whatsapp'] = 'Informe o WhatsApp com DDD, por exemplo (11) 91234-5678.';
+    }
+    if (!$erros) {
+        config_gravar($pdo, 'loja_ativa', $valoresLoja['ativa'] ? '1' : '0');
+        config_gravar($pdo, 'loja_nome', $valoresLoja['nome']);
+        config_gravar($pdo, 'loja_slogan', $valoresLoja['slogan'] !== '' ? $valoresLoja['slogan'] : null);
+        config_gravar($pdo, 'loja_whatsapp', $valoresLoja['whatsapp'] !== '' ? $valoresLoja['whatsapp'] : null);
+        registrar_atividade($pdo, 'ALTEROU', 'Alterou as configurações da loja online (' . ($valoresLoja['ativa'] ? 'aberta' : 'fechada') . ')', 'sistema');
+        flash('success', $valoresLoja['ativa'] ? 'Configurações da loja salvas. A loja está aberta.' : 'Configurações salvas. A loja está fechada ao público.');
+        header('Location: configuracoes.php');
+        exit;
+    }
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $valorMeta = trim((string)($_POST['meta_mensal'] ?? ''));
     $nova = $valorMeta === '' ? null : converter_moeda($valorMeta);
     if ($valorMeta !== '' && ($nova === null || $nova > VALOR_MAXIMO)) {
@@ -68,6 +97,41 @@ $ultimoBackup = $pdo->query("SELECT CRIADO_EM, USUARIO_NOME FROM atividades WHER
                 </section>
 
                 <section class="form-container">
+                    <h3 class="section-title"><?php echo icone('loja'); ?> Loja online</h3>
+                    <p class="text-muted">Vitrine pública onde os clientes montam o carrinho e enviam o pedido.
+                        <a href="loja.php" class="text-link" target="_blank" rel="noopener">Abrir a loja</a></p>
+                    <form method="POST" action="" novalidate>
+                        <?php echo csrf_campo(); ?>
+                        <input type="hidden" name="acao" value="loja">
+                        <label class="checkbox-linha loja-aberta">
+                            <input type="checkbox" name="loja_ativa" value="1" <?php echo $valoresLoja['ativa'] ? 'checked' : ''; ?>>
+                            <span><strong>Loja aberta ao público</strong><small>Desmarcada, os visitantes veem um aviso de "fechado" e não conseguem comprar.</small></span>
+                        </label>
+                        <div class="form-group<?php echo isset($erros['loja_nome']) ? ' has-error' : ''; ?>">
+                            <label for="loja_nome">Nome da loja <span class="required" aria-hidden="true">*</span></label>
+                            <input type="text" id="loja_nome" name="loja_nome" maxlength="60" required value="<?php echo htmlspecialchars($valoresLoja['nome']); ?>">
+                            <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['loja_nome'] ?? ''); ?></span></small>
+                        </div>
+                        <div class="form-group<?php echo isset($erros['loja_slogan']) ? ' has-error' : ''; ?>">
+                            <label for="loja_slogan">Slogan</label>
+                            <input type="text" id="loja_slogan" name="loja_slogan" maxlength="160" placeholder="Opcional. Aparece no banner da página inicial."
+                                   value="<?php echo htmlspecialchars($valoresLoja['slogan']); ?>">
+                            <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['loja_slogan'] ?? ''); ?></span></small>
+                        </div>
+                        <div class="form-group<?php echo isset($erros['loja_whatsapp']) ? ' has-error' : ''; ?>">
+                            <label for="loja_whatsapp">WhatsApp da loja</label>
+                            <input type="tel" id="loja_whatsapp" name="loja_whatsapp" maxlength="20" placeholder="(11) 91234-5678"
+                                   value="<?php echo htmlspecialchars($valoresLoja['whatsapp']); ?>" aria-describedby="zap-ajuda">
+                            <small class="field-help" id="zap-ajuda">Opcional. Mostra botões "Fale conosco" e permite ao cliente avisar a loja depois do pedido.</small>
+                            <small class="field-error"><?php echo icone('erro'); ?><span><?php echo htmlspecialchars($erros['loja_whatsapp'] ?? ''); ?></span></small>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary"><?php echo icone('salvar'); ?> Salvar loja</button>
+                        </div>
+                    </form>
+                </section>
+
+                <section class="form-container">
                     <h3 class="section-title"><?php echo icone('banco'); ?> Backup do banco de dados</h3>
                     <p class="text-muted">Baixa um arquivo <code>.sql</code> com todas as tabelas e dados
                         (cerca de <?php echo number_format($tamanho / 1024, 0, ',', '.'); ?> KB no banco). Guarde-o fora deste computador.</p>
@@ -83,6 +147,7 @@ $ultimoBackup = $pdo->query("SELECT CRIADO_EM, USUARIO_NOME FROM atividades WHER
                         <button type="submit" class="btn btn-primary"><?php echo icone('download'); ?> Baixar backup agora</button>
                     </form>
                     <p class="field-help">Para restaurar: <code>mysql -u root mini_sistema &lt; backup.sql</code> (substitui as tabelas atuais).</p>
+                    <p class="field-help">As fotos dos produtos ficam na pasta <code>uploads/produtos</code>: copie essa pasta junto com o backup.</p>
                 </section>
             </div>
         </main>

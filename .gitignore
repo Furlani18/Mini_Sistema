@@ -1,2 +1,6 @@
 # Configuração local (dados de acesso ao banco)
 config.php
+
+# Fotos dos produtos enviadas pelo sistema (ficam só no servidor; faça cópia junto com o backup)
+uploads/produtos/*
+!uploads/produtos/.gitkeep

@@ -40,6 +40,7 @@ $menu = [
     'Vendas' => [
         'pedidos.php'        => ['carrinho', 'Pedidos'],
         'contas_receber.php' => ['dinheiro', 'Contas a receber'],
+        'loja.php'           => ['loja', 'Ver loja online'],
     ],
     'Cadastros' => [
         'clientes.php'     => ['usuarios', 'Clientes'],

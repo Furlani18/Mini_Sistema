@@ -4348,3 +4348,203 @@ kbd {
     display: none !important;
   }
 }
+
+/* ==========================================================================
+   Loja online — partes que aparecem no sistema interno
+   (o visual da vitrine pública fica em css/loja.css)
+   ========================================================================== */
+
+/* Caixa de seleção com título e explicação */
+.checkbox-linha {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--body-text);
+}
+
+.checkbox-linha input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  accent-color: var(--primary-color);
+}
+
+.checkbox-linha span {
+  display: grid;
+  gap: 2px;
+}
+
+.checkbox-linha strong {
+  color: var(--dark-text);
+}
+
+.checkbox-linha small {
+  color: var(--muted-text);
+  font-size: var(--text-xs);
+}
+
+.checkbox-linha.loja-aberta {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--light-bg);
+}
+
+/* Cadastro do produto: bloco "Loja online" com a foto */
+.produto-loja {
+  margin: var(--space-2) 0 var(--space-4);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--light-bg);
+}
+
+.produto-loja legend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  color: var(--dark-text);
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+
+.produto-loja legend .icon {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-color);
+}
+
+.produto-loja-grade {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-5);
+}
+
+.produto-foto-campo {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+
+.produto-foto-previa {
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.produto-foto-previa img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity var(--transition), filter var(--transition);
+}
+
+.produto-foto-previa.is-removendo img {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.produto-foto-vazia {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  height: 100%;
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+
+.produto-foto-vazia .icon {
+  width: 32px;
+  height: 32px;
+}
+
+.produto-foto-acoes {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.produto-foto-acoes label.btn {
+  cursor: pointer;
+}
+
+/* O campo de arquivo é invisível; o foco aparece no botão (label) */
+.produto-foto-acoes input[type="file"]:focus-visible + .checkbox-linha,
+.produto-foto-acoes:has(input[type="file"]:focus-visible) label.btn {
+  box-shadow: var(--focus-ring);
+}
+
+.produto-foto-campo .field-error {
+  display: none;
+}
+
+.produto-foto-campo.has-error .field-error {
+  display: flex;
+}
+
+.produto-loja-opcoes {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.produto-loja-opcoes .text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+}
+
+.produto-loja-opcoes .text-link .icon {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 720px) {
+  .produto-loja-grade {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Lista de produtos: miniatura da foto */
+.avatar-foto {
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.badge-fora-loja {
+  background: var(--light-bg);
+  border-color: var(--border-color);
+  color: var(--muted-text);
+}
+
+/* Pedido feito pela loja online */
+.badge-categoria + .badge-fora-loja {
+  margin-left: 4px;
+}
+
+.badge-loja {
+  background: var(--violet-soft);
+  border-color: var(--violet-border);
+  color: var(--violet-color);
+}
+
+.badge-loja .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.detalhes > .detalhes-largo {
+  grid-column: 1 / -1;
+}

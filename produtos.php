@@ -3,6 +3,7 @@ require_once 'auth.php';
 require_once 'conexao.php';
 require_once 'ui.php';
 require_once 'lista.php';
+require_once 'loja_funcoes.php';
 
 // Lista de produtos com busca, filtro de estoque, ordenação e paginação.
 // LEFT JOIN: mostra também os produtos que nunca foram vendidos (vendidos = 0).
@@ -59,14 +60,14 @@ $stmt->execute($parametros);
 $pag = paginacao((int)$stmt->fetchColumn());
 
 $stmt = $pdo->prepare(
-    "SELECT pr.ID, pr.NOME, pr.DESCRICAO, pr.PRECO, pr.CUSTO, pr.ESTOQUE, pr.SKU, cat.NOME AS CATEGORIA,
+    "SELECT pr.ID, pr.NOME, pr.DESCRICAO, pr.PRECO, pr.CUSTO, pr.ESTOQUE, pr.SKU, pr.FOTO, pr.NA_LOJA, cat.NOME AS CATEGORIA,
             COALESCE(SUM(CASE WHEN p.STATUS IN ('ABERTO', 'PAGO', 'ENVIADO') THEN i.QUANTIDADE END), 0) AS VENDIDOS
        FROM produtos pr
        LEFT JOIN categorias cat ON cat.ID = pr.CATEGORIA_ID
        LEFT JOIN itens_pedido i ON i.PRODUTO_ID = pr.ID
        LEFT JOIN pedidos p ON p.ID = i.PEDIDO_ID
        $where
-      GROUP BY pr.ID, pr.NOME, pr.DESCRICAO, pr.PRECO, pr.CUSTO, pr.ESTOQUE, pr.SKU, cat.NOME
+      GROUP BY pr.ID, pr.NOME, pr.DESCRICAO, pr.PRECO, pr.CUSTO, pr.ESTOQUE, pr.SKU, pr.FOTO, pr.NA_LOJA, cat.NOME
       ORDER BY {$ordem['sql']}, pr.ID DESC
       LIMIT {$pag['limite']} OFFSET {$pag['offset']}"
 );
@@ -156,11 +157,16 @@ $totalCadastrados = $filtrando ? (int)$pdo->query('SELECT COUNT(*) FROM produtos
                                         <tr>
                                             <td class="cell-client">
                                                 <div class="client">
-                                                    <span class="avatar" aria-hidden="true"><?php echo icone('pacote'); ?></span>
+                                                    <?php if ($fotoUrl = foto_url($p['FOTO'])): ?>
+                                                        <img src="<?php echo htmlspecialchars($fotoUrl); ?>" alt="" class="avatar avatar-foto" loading="lazy">
+                                                    <?php else: ?>
+                                                        <span class="avatar" aria-hidden="true"><?php echo icone('pacote'); ?></span>
+                                                    <?php endif; ?>
                                                     <span>
                                                         <span class="client-name"><?php echo $nome; ?></span>
-                                                        <span class="client-id">#<?php echo $p['ID']; ?><?php echo $p['SKU'] ? ' · SKU ' . htmlspecialchars($p['SKU']) : ''; ?><?php echo $p['DESCRICAO'] ? ' · ' . htmlspecialchars($p['DESCRICAO']) : ''; ?></span>
+                                                        <span class="client-id">#<?php echo $p['ID']; ?><?php echo $p['SKU'] ? ' · SKU ' . htmlspecialchars($p['SKU']) : ''; ?><?php echo $p['DESCRICAO'] ? ' · ' . htmlspecialchars(mb_strimwidth((string)$p['DESCRICAO'], 0, 60, '…')) : ''; ?></span>
                                                         <?php if ($p['CATEGORIA']): ?><span class="badge badge-categoria"><?php echo htmlspecialchars($p['CATEGORIA']); ?></span><?php endif; ?>
+                                                        <?php if (!$p['NA_LOJA']): ?><span class="badge badge-fora-loja" title="Não aparece na loja online">Fora da loja</span><?php endif; ?>
                                                     </span>
                                                 </div>
                                             </td>

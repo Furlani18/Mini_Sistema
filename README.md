@@ -1,10 +1,17 @@
 # 📋 Sistema de Gerenciamento de Clientes
 
-Sistema web para gerenciar clientes, produtos, pedidos e estoque, desenvolvido com PHP (sem framework), MySQL/MariaDB, HTML, CSS e JavaScript, protegido por login com níveis de acesso.
+Sistema web para gerenciar clientes, produtos, pedidos e estoque, com uma **loja online** pública na frente, desenvolvido com PHP (sem framework), MySQL/MariaDB, HTML, CSS e JavaScript. A área interna é protegida por login com níveis de acesso.
 
 > 📘 Documentação técnica completa (arquitetura, banco de dados, segurança e guia de consultas SQL): [DOCUMENTACAO.md](DOCUMENTACAO.md)
 
 ## 🎯 Funcionalidades
+
+**Loja online (pública, sem login)**
+- 🛍️ **Vitrine** - Banner, destaques, categorias, busca, ordenação e fotos dos produtos
+- 🛒 **Carrinho** - Quantidades limitadas ao estoque, sempre com o preço atual
+- ✅ **Finalização** - Dados de contato, entrega em casa (endereço pelo CEP) ou retirada, e forma de pagamento. O pedido entra no sistema como "Aberto", com o selo **Loja online**
+- 💬 **WhatsApp** - Botões de dúvida e de aviso do pedido para o número da loja
+- 🔒 **Proteções** - Token CSRF, campo-isca contra robôs e limite de pedidos por hora
 
 **Clientes**
 - 👤 **Cadastro completo** - Nome, email (único), telefone, CPF/CNPJ (com validação dos dígitos), data de nascimento, endereço e observações
@@ -14,7 +21,7 @@ Sistema web para gerenciar clientes, produtos, pedidos e estoque, desenvolvido c
 - 📥 **Importação de planilha** - Clientes em lote a partir de um CSV do Excel, com verificação antes de gravar
 
 **Produtos, estoque e fornecedores**
-- 📦 **Produtos** - Categoria, SKU, código de barras, preço, custo e margem
+- 📦 **Produtos** - Foto, categoria, SKU, código de barras, preço, custo e margem; "mostrar na loja" e "destaque"
 - 🏷️ **Categorias** - Filtro na lista de produtos e vendas por categoria nos relatórios
 - 🚚 **Fornecedores** - Cada entrada de estoque registra de quem foi a compra e quanto custou (custo médio automático)
 - 🔁 **Histórico de estoque** - Toda entrada, saída, venda, devolução e ajuste fica registrada, com motivo e responsável
@@ -54,11 +61,12 @@ C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < clientes.sql
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < relacionamentos.sql
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < melhorias.sql
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < melhorias_2.sql
+C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < melhorias_3.sql
 ```
 
 Os scripts podem ser executados mais de uma vez sem duplicar nada. Se o banco já existia de uma
-versão anterior, rode só os que faltam (`melhorias.sql` e/ou `melhorias_2.sql`): eles só
-acrescentam colunas e tabelas.
+versão anterior, rode só os que faltam (`melhorias.sql`, `melhorias_2.sql` e/ou `melhorias_3.sql`):
+eles só acrescentam colunas e tabelas.
 
 ### 3. Configurar o acesso ao banco
 
@@ -68,8 +76,12 @@ Copie `config.exemplo.php` para `config.php` e ajuste usuário e senha, se não 
 ### 4. Acessar
 
 ```
-http://localhost/mini_sistema/mini_sistema/login.php
+http://localhost/mini_sistema/mini_sistema/
 ```
+
+Visitantes veem a **loja online**; a equipe entra pelo link **Área da equipe** (ou em `login.php`).
+Nome, slogan, WhatsApp e abrir/fechar a loja ficam em **Configurações**; foto e "mostrar na loja",
+no cadastro de cada produto.
 
 Ou, dentro da pasta do projeto, `php -S localhost:8000` e acesse `http://localhost:8000`.
 
@@ -123,13 +135,16 @@ Estrutura, regras `ON DELETE` e diagrama na seção 6 da [DOCUMENTACAO.md](DOCUM
 A lista completa de arquivos, com a função de cada um, está na seção 4 da
 [DOCUMENTACAO.md](DOCUMENTACAO.md). Em resumo:
 
+- Loja online: `loja.php`, `loja_produto.php`, `loja_carrinho.php`, `loja_finalizar.php`, `loja_pedido.php`
+  (+ `loja_inicio.php`, `loja_layout.php`, `loja_funcoes.php`, `css/loja.css`, `js/loja.js`)
 - Páginas: `index.php`, `relatorios.php`, `clientes.php`, `cliente_ver.php`, `produtos.php`,
   `produto_estoque.php`, `fornecedores.php`, `categorias.php`, `pedidos.php`, `pedido_ver.php`,
   `contas_receber.php`, `usuarios.php`, `atividades.php`, `lixeira.php`, `configuracoes.php`, `perfil.php`…
 - Compartilhados: `auth.php`, `seguranca.php`, `lista.php`, `ui.php`, `validacao.php`, `estoque.php`,
   `financeiro.php`, `lixeira_funcoes.php`, `header.php`, `footer.php`
 - `css/style.css` (inclui modo escuro e impressão) e `js/` (validação, máscaras, CEP, pedido, gráfico, busca)
-- Scripts do banco: `usuarios.sql`, `clientes.sql`, `relacionamentos.sql`, `melhorias.sql`, `melhorias_2.sql`
+- Scripts do banco: `usuarios.sql`, `clientes.sql`, `relacionamentos.sql`, `melhorias.sql`, `melhorias_2.sql`, `melhorias_3.sql`
+- `uploads/produtos/`: fotos dos produtos (fora do git; copie junto com o backup)
 - `tests/`: testes automatizados
 
 ## 🛠️ Tecnologias
@@ -142,11 +157,12 @@ A lista completa de arquivos, com a função de cada um, está na seção 4 da
 ## 📞 Problemas comuns
 
 1. **Tela branca ou erro de conexão**: confira se o MySQL está ativo no XAMPP.
-2. **Erro de coluna ou tabela inexistente**: rode o `melhorias.sql` e o `melhorias_2.sql`.
+2. **Erro de coluna ou tabela inexistente**: rode o `melhorias.sql`, o `melhorias_2.sql` e o `melhorias_3.sql`.
    Se o `melhorias_2.sql` parar com "Duplicate entry", há dois clientes com o mesmo email: corrija um e rode de novo.
 3. **"Muitas tentativas erradas"**: aguarde 15 minutos ou limpe a tabela `tentativas_login`.
 4. **CEP não preenche o endereço**: a busca precisa de internet; sem ela, digite à mão.
-5. **Usuário esqueceu a senha**: um administrador abre o usuário, gera uma senha temporária e passa para ele; no primeiro acesso ele escolhe uma nova.
+5. **Foto do produto não salva**: confira se a pasta `uploads/produtos` existe e se o Apache pode gravar nela.
+6. **Usuário esqueceu a senha**: um administrador abre o usuário, gera uma senha temporária e passa para ele; no primeiro acesso ele escolhe uma nova.
 
 ## 📄 Licença
 

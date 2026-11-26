@@ -39,11 +39,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([(int)$_GET['excluir']]);
         $descricao = $stmt->fetchColumn();
         if ($descricao !== false) {
+            lixeira_apagar_fotos($pdo, (int)$_GET['excluir']);
             $pdo->prepare('DELETE FROM lixeira WHERE ID = ?')->execute([(int)$_GET['excluir']]);
             registrar_atividade($pdo, 'APAGOU', "Excluiu de vez da lixeira: $descricao", 'sistema');
             flash('success', "$descricao foi excluído de vez.");
         }
     } elseif (isset($_GET['esvaziar'])) {
+        lixeira_apagar_fotos($pdo);
         $quantos = $pdo->exec('DELETE FROM lixeira');
         if ($quantos > 0) {
             registrar_atividade($pdo, 'APAGOU', "Esvaziou a lixeira ($quantos itens)", 'sistema');

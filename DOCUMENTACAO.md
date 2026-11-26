@@ -25,12 +25,14 @@
 ## 1. Visão geral
 
 O **Mini Sistema** é uma aplicação web de gestão de clientes, produtos e pedidos, escrita em PHP
-puro (sem framework), com banco MySQL/MariaDB acessado via **PDO**. Todo o sistema fica protegido
+puro (sem framework), com banco MySQL/MariaDB acessado via **PDO**. A área interna fica protegida
 por uma tela de **login** baseada em sessão PHP, com dois níveis de acesso (**Administrador** e
-**Operador**).
+**Operador**). Na frente fica a **loja online**: uma vitrine pública, sem login, onde os clientes
+montam o carrinho e enviam pedidos que caem direto no sistema.
 
 | Funcionalidade | Página          | Operação SQL principal |
 |----------------|-----------------|------------------------|
+| Loja online (pública) | `loja.php`, `loja_produto.php`, `loja_carrinho.php`, `loja_finalizar.php`, `loja_pedido.php` | Vitrine com busca e categorias; carrinho na sessão; pedido gravado em transação (`clientes`, `pedidos`, `itens_pedido`, estoque) |
 | Login / Logout | `login.php`, `logout.php` | `SELECT` + limite de tentativas (`tentativas_login`) |
 | Painel (início) | `index.php`    | `SELECT` com subconsultas (totais, meta do mês, últimos pedidos, estoque baixo, orçamentos, aniversariantes) |
 | Busca global (Ctrl+K) | `busca_global.php` | `SELECT` em clientes, produtos, pedidos e fornecedores (resposta JSON) |
@@ -51,7 +53,7 @@ por uma tela de **login** baseada em sessão PHP, com dois níveis de acesso (**
 | Imprimir pedido | `pedido_imprimir.php` | Comprovante (ou orçamento) para imprimir ou salvar em PDF |
 | Apagar pedido  | `pedido_apagar.php` | Cópia para a lixeira + `DELETE` (itens e parcelas por `CASCADE`) |
 | Lixeira        | `lixeira.php`   | Restaura ou exclui de vez clientes, produtos e pedidos apagados |
-| Configurações e backup | `configuracoes.php`, `backup.php` | Meta de vendas (`configuracoes`) e download de um `.sql` com todo o banco |
+| Configurações e backup | `configuracoes.php`, `backup.php` | Meta de vendas e dados da loja online (`configuracoes`) e download de um `.sql` com todo o banco |
 | Usuários       | `usuarios.php`, `usuario_cadastro.php`, `usuario_apagar.php` | Somente administradores |
 | Meu perfil     | `perfil.php`    | `UPDATE` dos próprios dados e da senha |
 | Atividades     | `atividades.php` | Registro de quem fez o quê (somente administradores) |
@@ -122,7 +124,9 @@ Depois, execute os cinco scripts do projeto, **nesta ordem** (cada um depende do
   `atividades` e `tentativas_login`;
 - [melhorias_2.sql](melhorias_2.sql) — orçamentos, parcelas, meta, categorias, SKU/código de
   barras, fornecedores e custo, lixeira, data de nascimento, email único de cliente e troca de
-  senha obrigatória.
+  senha obrigatória;
+- [melhorias_3.sql](melhorias_3.sql) — loja online: foto, "mostrar na loja" e destaque dos
+  produtos, origem e endereço de entrega dos pedidos e as configurações da loja.
 
 Pelo terminal:
 
@@ -132,11 +136,12 @@ C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < clientes.sql
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < relacionamentos.sql
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < melhorias.sql
 C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < melhorias_2.sql
+C:\xampp\mysql\bin\mysql.exe -u root mini_sistema < melhorias_3.sql
 ```
 
 Todos os scripts podem ser executados mais de uma vez sem duplicar tabelas nem dados. Em um banco
-que já estava em uso, basta rodar os que ainda não foram aplicados (`melhorias.sql` e/ou
-`melhorias_2.sql`): eles só **acrescentam** colunas e tabelas.
+que já estava em uso, basta rodar os que ainda não foram aplicados (`melhorias.sql`,
+`melhorias_2.sql` e/ou `melhorias_3.sql`): eles só **acrescentam** colunas e tabelas.
 
 > O `melhorias_2.sql` cria um índice único no email dos clientes. Se ele parar com
 > "Duplicate entry", existem dois clientes com o mesmo email: corrija um deles e rode de novo.
@@ -146,7 +151,9 @@ que já estava em uso, basta rodar os que ainda não foram aplicados (`melhorias
 
 ### 3.3 Acessar
 
-- Via Apache do XAMPP: `http://localhost/mini_sistema/mini_sistema/login.php`
+- Via Apache do XAMPP: `http://localhost/mini_sistema/mini_sistema/` — quem **não** está logado
+  vê a **loja online**; a equipe entra pelo link **Área da equipe** (ou direto em `login.php`).
+  Com a loja fechada em Configurações, o endereço principal leva direto ao login.
 - Ou via servidor embutido do PHP (na pasta do projeto), acessando depois `http://localhost:8000`:
 
 ```bash
@@ -205,6 +212,14 @@ mini_sistema/
 ├── sessao.php       # Fuso horário, cookie de sessão seguro e session_start()
 ├── auth.php         # "Guarda" das páginas: exige login, recarrega o perfil e confere o token CSRF
 ├── seguranca.php    # CSRF, níveis de acesso, limite de tentativas de login e registro de atividades
+├── loja.php         # Loja online: vitrine pública (destaques, busca, categorias, ordenação)
+├── loja_produto.php # Loja online: página do produto (foto, descrição, quantidade, relacionados)
+├── loja_carrinho.php # Loja online: carrinho (adicionar, alterar, remover, esvaziar)
+├── loja_finalizar.php # Loja online: dados, entrega e pagamento → grava o pedido
+├── loja_pedido.php  # Loja online: confirmação do pedido (só no navegador que comprou)
+├── loja_inicio.php  # Início comum das páginas da loja (sessão, CSRF, loja fechada)
+├── loja_layout.php  # Topo, rodapé e card de produto da loja
+├── loja_funcoes.php # Carrinho, fotos dos produtos e gravação do pedido da loja
 ├── login.php        # Formulário e processamento do login
 ├── logout.php       # Sai do sistema (somente por POST com token)
 ├── index.php        # Painel: totais, meta do mês, pedidos, estoque baixo, orçamentos e aniversariantes
@@ -256,9 +271,14 @@ mini_sistema/
 ├── relacionamentos.sql # Script de `produtos`, `pedidos` e `itens_pedido` + dados de exemplo
 ├── melhorias.sql    # Colunas e tabelas novas (perfis, endereço, desconto, estoque, atividades)
 ├── melhorias_2.sql  # Orçamento, parcelas, metas, categorias, fornecedores, custo, lixeira…
+├── melhorias_3.sql  # Loja online: foto/destaque dos produtos, origem e entrega dos pedidos
+├── uploads/
+│   ├── .htaccess    # Só deixa abrir imagens; nada ali é executado como PHP
+│   └── produtos/    # Fotos dos produtos enviadas pelo sistema (fora do git)
 ├── tests/           # Testes automatizados (php tests/executar.php)
 ├── css/
-│   └── style.css    # Estilo de todas as páginas, inclusive modo escuro e impressão
+│   ├── style.css    # Estilo de todas as páginas internas, inclusive modo escuro e impressão
+│   └── loja.css     # Visual da loja online (usa as variáveis e componentes do style.css)
 ├── js/
 │   ├── app.js        # Toasts, modal de exclusão, filtros automáticos e modo escuro
 │   ├── formulario.js # Validação e máscaras dos formulários de cliente e usuário
@@ -266,6 +286,8 @@ mini_sistema/
 │   ├── relatorios.js # Dicas (tooltip) do gráfico de faturamento
 │   ├── pedido.js     # Itens, subtotal, desconto, total e "adicionar por código" do pedido
 │   ├── busca.js      # Busca global (Ctrl+K)
+│   ├── loja.js       # Loja: quantidade − / +, carrinho automático, entrega x retirada, envio único
+│   ├── foto.js       # Prévia da foto do produto e redução no navegador antes do envio
 │   └── moeda.js      # Máscara de reais (preço, custo, desconto e meta)
 ├── imagens/
 │   └── bem-vindo.jpeg
@@ -721,6 +743,32 @@ soma é sempre igual ao total.
   do registro: histórico de estoque do produto; itens e parcelas do pedido. Ao restaurar, tudo volta
   com os mesmos IDs; referências que não existem mais (categoria, fornecedor, usuário) ficam vazias.
 
+### 6.18 Loja online (`melhorias_3.sql`)
+
+| Tabela | Coluna | Descrição |
+|--------|--------|-----------|
+| `produtos` | `FOTO` (`VARCHAR(60) NULL`) | Nome do arquivo em `uploads/produtos/` (gerado pelo sistema: `ID-aleatório.jpg`) |
+| `produtos` | `NA_LOJA` (`TINYINT`, padrão 1) | 0 = o produto não aparece na loja (continua vendável pelo sistema) |
+| `produtos` | `DESTAQUE` (`TINYINT`, padrão 0) | 1 = aparece em "Destaques" na página inicial da loja |
+| `produtos` | `DESCRICAO` agora `VARCHAR(1000)` | Texto da página do produto na loja |
+| `pedidos`  | `ORIGEM` (`ENUM('SISTEMA','LOJA')`) | `LOJA` = feito pelo cliente no site (sem `USUARIO_ID`) |
+| `pedidos`  | `ENTREGA` (`VARCHAR(500) NULL`) | Endereço de entrega ou "Retirar na loja", com o nome e telefone de contato |
+
+A visão `vw_pedidos` passou a trazer `ORIGEM`. Em `configuracoes` entram `loja_ativa`, `loja_nome`,
+`loja_slogan` e `loja_whatsapp` (editadas em **Configurações → Loja online**).
+
+**Como o pedido da loja é gravado** (`loja_registrar_pedido()` em [loja_funcoes.php](loja_funcoes.php),
+numa transação):
+1. o cliente é procurado pelo **email**: se já existe, o pedido vai para ele **sem alterar o
+   cadastro** (outra pessoa poderia digitar o email de alguém); senão, é criado com os dados
+   informados (observação "Cadastrado pela loja online");
+2. `pedidos` recebe `STATUS = 'ABERTO'`, `ORIGEM = 'LOJA'`, `USUARIO_ID = NULL`, forma de
+   pagamento, observação e `ENTREGA`;
+3. `itens_pedido` copia **do banco** o preço e o custo atuais (o carrinho guarda só ids e
+   quantidades) e só aceita produtos com `NA_LOJA = 1`;
+4. o estoque é baixado como em qualquer venda (`baixar_estoque()`, motivo "Pedido #N (loja online)");
+   se faltar estoque, nada é gravado.
+
 ---
 
 ## 7. Descrição de cada arquivo
@@ -944,6 +992,60 @@ paginação. Parcelas vencidas mostram os dias de atraso e um botão de **cobran
 `dividir_parcelas()`, `situacao_parcela()` (a vencer, vencida, recebida — vence hoje ainda não é
 vencida), `parcelas_do_pedido()` e `marcar_pedido_pago_se_quitado()`.
 
+### Loja online
+
+#### [loja.php](loja.php)
+Vitrine pública. Na página inicial (sem busca nem filtro): banner com o nome e o slogan da loja,
+**Destaques** (produtos marcados, com estoque) e todos os produtos. Busca por nome, descrição ou SKU
+(`?q=`), categorias em "chips" (só as que têm produtos na loja), ordenação (mais vendidos, preço,
+nome, novidades) e paginação de 12 em 12. Esgotados aparecem no fim, sem botão de compra.
+
+#### [loja_produto.php](loja_produto.php)
+Foto grande, categoria, preço, disponibilidade ("Em estoque", "Últimas N unidades", "Esgotado"),
+quantidade limitada ao estoque menos o que já está no carrinho, **Adicionar ao carrinho** /
+**Comprar agora**, dúvida pelo WhatsApp da loja e até 4 produtos da mesma categoria. Produto fora
+da loja → 404.
+
+#### [loja_carrinho.php](loja_carrinho.php)
+Carrinho na sessão do visitante (`$_SESSION['carrinho']`, no máximo 30 produtos e 99 unidades de
+cada). Todas as ações são `POST` com token CSRF. `carrinho_montar()` relê preço e estoque a cada
+exibição: produto esgotado ou retirado da loja sai do carrinho, quantidade acima do estoque é
+reduzida, e o visitante é avisado. O endereço de volta depois de "Adicionar" só aceita páginas da
+própria loja (`loja_voltar_seguro()`).
+
+#### [loja_finalizar.php](loja_finalizar.php)
+Dados (nome, email, telefone obrigatório, CPF/CNPJ opcional e conferido), **Receber em casa**
+(CEP com preenchimento pelo ViaCEP) ou **Retirar na loja**, forma de pagamento e observações.
+Nada é cobrado online: a loja confirma e combina o pagamento depois. Proteções: CSRF, campo-isca
+invisível contra robôs (preenchido → finge sucesso sem gravar), no máximo 5 pedidos por IP por hora
+(contados no registro de atividades) e botão que trava no envio. Os dados ficam na sessão para
+pré-preencher a próxima compra.
+
+#### [loja_pedido.php](loja_pedido.php)
+Confirmação com itens, total, entrega e botão **Avisar a loja pelo WhatsApp**. Só abre pedidos
+feitos naquele navegador (`$_SESSION['loja_pedidos']`), para ninguém ver o pedido dos outros
+trocando o número na URL.
+
+#### [loja_inicio.php](loja_inicio.php), [loja_layout.php](loja_layout.php), [loja_funcoes.php](loja_funcoes.php)
+`loja_inicio.php` é incluído no topo de toda página da loja: sessão, conexão, cabeçalhos de
+segurança, token CSRF nos `POST` e **loja fechada** (o público recebe 503; a equipe logada vê a loja
+com uma faixa de aviso). `loja_layout.php` tem o topo (marca, busca, modo escuro, Área da equipe,
+carrinho com contador), o rodapé e o card de produto. `loja_funcoes.php` reúne configurações,
+carrinho, validação da finalização, gravação do pedido e as **fotos**:
+`foto_validar()` descobre o tipo pelo conteúdo do arquivo (JPG, PNG ou WebP; até 3 MB; de 50 a
+6000 px), `foto_gravar()` salva com nome aleatório, `produto_trocar_foto()` troca ou remove a foto
+apagando o arquivo antigo e `foto_produto()` mostra a foto ou um quadro colorido com a inicial.
+
+#### Do lado da equipe
+- **Produtos:** o cadastro ganhou o bloco **Loja online** (foto com prévia, Mostrar na loja,
+  Destaque, link "Ver na loja"); a lista mostra a miniatura e a etiqueta "Fora da loja".
+- **Pedidos:** etiqueta **Loja online** na coluna "Registrado por" e filtro de origem
+  (`pedidos.php?origem=LOJA`); o pedido mostra um aviso para confirmar com o cliente e o endereço de
+  **Entrega**, que também sai no comprovante.
+- **Painel:** alerta com a quantidade e o valor dos pedidos da loja com status "Aberto".
+- **Menu:** item **Ver loja online** (grupo Vendas). O login tem o link de volta para a loja.
+- **Lixeira:** "Excluir de vez" e "Esvaziar lixeira" apagam também a foto do produto.
+
 ### Administração
 
 #### [lixeira.php](lixeira.php), [lixeira_funcoes.php](lixeira_funcoes.php)
@@ -952,7 +1054,8 @@ Somente administradores. Lista os registros apagados (filtrável por tipo) com *
 pedido não existe mais, se um produto sumiu ou se falta estoque, nada muda e a mensagem explica.
 
 #### [configuracoes.php](configuracoes.php), [backup.php](backup.php)
-Somente administradores. A **meta mensal** de vendas (em branco = sem meta) e o **backup**: um
+Somente administradores. A **meta mensal** de vendas (em branco = sem meta), a **loja online**
+(aberta ou fechada, nome, slogan e WhatsApp) e o **backup**: um
 `.sql` com `DROP/CREATE TABLE`, os dados em `INSERT`s de 100 linhas (lidos sem guardar tudo na
 memória) e a visão `vw_pedidos` (sem o `DEFINER` do servidor de origem). Para restaurar:
 `mysql -u root mini_sistema < backup.sql`. O botão também aparece em "Banco de dados".
@@ -965,7 +1068,7 @@ explicando cada relacionamento, a lista de **todas as tabelas** do banco (lida a
 `information_schema`, com as chaves estrangeiras e a regra `ON DELETE` de cada uma) e uma consulta
 ao vivo com `JOIN` nas 5 tabelas.
 
-#### [usuarios.sql](usuarios.sql), [clientes.sql](clientes.sql), [relacionamentos.sql](relacionamentos.sql), [melhorias.sql](melhorias.sql), [melhorias_2.sql](melhorias_2.sql)
+#### [usuarios.sql](usuarios.sql), [clientes.sql](clientes.sql), [relacionamentos.sql](relacionamentos.sql), [melhorias.sql](melhorias.sql), [melhorias_2.sql](melhorias_2.sql), [melhorias_3.sql](melhorias_3.sql)
 Scripts idempotentes (podem rodar várias vezes): `CREATE TABLE IF NOT EXISTS`,
 `ADD COLUMN IF NOT EXISTS`, `ADD UNIQUE KEY IF NOT EXISTS`, `CREATE OR REPLACE VIEW` e
 `INSERT ... WHERE NOT EXISTS`. As chaves estrangeiras novas do `melhorias_2.sql` são criadas só se
@@ -1036,6 +1139,19 @@ abrem um `<dialog>`. A busca espera o usuário parar de digitar (200 ms), cancel
 (`AbortController`) e mostra os resultados agrupados; `↑`/`↓` escolhem, `Enter` abre, `Esc` fecha.
 Os textos vindos do banco entram com `textContent` (nunca viram HTML).
 
+
+### 8.9 [css/loja.css](css/loja.css), [js/loja.js](js/loja.js) e [js/foto.js](js/foto.js)
+- **`loja.css`** — visual de vitrine sobre as variáveis do `style.css` (por isso o modo escuro vale
+  também na loja): topo fixo com busca, banner em degradê, cards de produto com foto quadrada e
+  selos (Destaque, Últimas unidades, Esgotado), página do produto em duas colunas, carrinho e
+  finalização com resumo lateral fixo. No celular: 2 produtos por linha e resumo abaixo.
+- **`loja.js`** — botões − / + respeitando o mínimo e o máximo; no carrinho, a mudança é enviada
+  sozinha após 0,7 s; "Retirar na loja" esconde o endereço; máscara de telefone; o botão "Enviar
+  pedido" trava após o clique. Sem JavaScript, tudo funciona por formulário comum.
+- **`foto.js`** — ao escolher a foto, mostra a prévia e, se ela for grande, **reduz no navegador**
+  (lado maior até 1200 px, JPEG 85%) antes do envio, trocando o arquivo do campo. Assim o servidor
+  não precisa da extensão GD do PHP. Se o navegador não conseguir, envia o original (o servidor
+  confere de qualquer jeito).
 ---
 
 ## 9. Segurança
@@ -1064,6 +1180,11 @@ Os textos vindos do banco entram com `textContent` (nunca viram HTML).
 | Registro de atividades (auditoria)       | `registrar_atividade()`, `atividades.php` |
 | Chaves estrangeiras, `UNIQUE` e `CHECK` (integridade) | scripts `.sql` |
 | Transações + `SELECT ... FOR UPDATE`: pedido e estoque nunca ficam pela metade | `pedido_novo.php`, `pedido_ver.php`, `pedido_apagar.php`, `estoque.php` |
+| Loja: preço e estoque sempre lidos do banco (o carrinho guarda só ids e quantidades) | `loja_funcoes.php` |
+| Loja: CSRF, campo-isca contra robôs e limite de 5 pedidos por IP por hora | `loja_inicio.php`, `loja_finalizar.php` |
+| Loja: cliente existente não é alterado por quem digita o email dele; confirmação só no navegador que comprou | `loja_registrar_pedido()`, `loja_pedido.php` |
+| Loja: redirecionamento só para páginas da própria loja | `loja_voltar_seguro()` |
+| Fotos: tipo pelo conteúdo (`finfo` + `getimagesize`), nome aleatório, pasta sem PHP e sem listagem | `foto_validar()`, `uploads/.htaccess` |
 
 ---
 

@@ -10,6 +10,7 @@ require_once 'lista.php';
 // Os totais vêm da visão vw_pedidos (itens somados, menos o desconto) — ver melhorias.sql.
 // Filtros (todos opcionais, combináveis):
 //   ?q=texto  ?status=PAGO  ?de=2026-01-01  ?ate=2026-12-31  ?cliente=ID (link vindo da lista de clientes)
+//   ?origem=LOJA (só pedidos feitos pelos clientes na loja online) ou ?origem=SISTEMA
 // Ordenação por coluna e paginação ficam no lista.php.
 
 $q = busca_da_url();
@@ -17,6 +18,7 @@ $status = $_GET['status'] ?? '';
 if (!is_string($status) || !isset(status_pedidos()[$status])) {
     $status = '';
 }
+$origem = in_array($_GET['origem'] ?? '', ['LOJA', 'SISTEMA'], true) ? $_GET['origem'] : '';
 $de = data_da_url('de');
 $ate = data_da_url('ate');
 $clienteFiltro = isset($_GET['cliente']) ? (int)$_GET['cliente'] : 0;
@@ -36,6 +38,10 @@ if ($q !== '') {
 if ($status !== '') {
     $condicoes[] = 'p.STATUS = ?';
     $parametros[] = $status;
+}
+if ($origem !== '') {
+    $condicoes[] = 'p.ORIGEM = ?';
+    $parametros[] = $origem;
 }
 if ($de) {
     $condicoes[] = 'p.CRIADO_EM >= ?';
@@ -77,7 +83,7 @@ $resumo = $stmt->fetch();
 $pag = paginacao((int)$resumo['QTD']);
 
 $stmt = $pdo->prepare(
-    "SELECT p.ID, p.STATUS, p.CRIADO_EM, p.ITENS, p.TOTAL, p.DESCONTO,
+    "SELECT p.ID, p.STATUS, p.ORIGEM, p.CRIADO_EM, p.ITENS, p.TOTAL, p.DESCONTO,
             (SELECT COUNT(*) FROM parcelas pa WHERE pa.PEDIDO_ID = p.ID AND pa.PAGO_EM IS NOT NULL) AS RECEBIDAS,
             c.ID AS CLIENTE_ID, c.NOME AS CLIENTE,
             u.NOME AS USUARIO
@@ -91,7 +97,7 @@ $stmt = $pdo->prepare(
 $stmt->execute($parametros);
 $pedidos = $stmt->fetchAll();
 
-$filtrando = $q !== '' || $status !== '' || $de || $ate;
+$filtrando = $q !== '' || $status !== '' || $origem !== '' || $de || $ate;
 $totalCadastrados = (int)$pdo->query('SELECT COUNT(*) FROM pedidos')->fetchColumn();
 $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro : '');
 ?>
@@ -137,7 +143,7 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                     </div>
                 <?php else: ?>
                     <form method="get" class="filtros" role="search">
-                        <?php echo campos_ocultos(['q', 'status', 'de', 'ate', 'pagina']); ?>
+                        <?php echo campos_ocultos(['q', 'status', 'origem', 'de', 'ate', 'pagina']); ?>
                         <label for="buscaPedidos" class="visually-hidden">Buscar pedido</label>
                         <div class="search-input">
                             <?php echo icone('busca'); ?>
@@ -151,6 +157,12 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                                 <option value="<?php echo $valor; ?>"<?php echo $valor === $status ? ' selected' : ''; ?>><?php echo $rotulo; ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <label for="filtroOrigem" class="visually-hidden">Origem</label>
+                        <select id="filtroOrigem" name="origem" class="filtro-select" data-auto-submit>
+                            <option value="">Todas as origens</option>
+                            <option value="LOJA"<?php echo $origem === 'LOJA' ? ' selected' : ''; ?>>Loja online</option>
+                            <option value="SISTEMA"<?php echo $origem === 'SISTEMA' ? ' selected' : ''; ?>>Registrados pela equipe</option>
+                        </select>
                         <div class="filtro-periodo">
                             <label for="filtroDe">De</label>
                             <input type="date" id="filtroDe" name="de" value="<?php echo $de; ?>">
@@ -159,7 +171,7 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                         </div>
                         <button type="submit" class="btn btn-outline"><?php echo icone('busca'); ?> Filtrar</button>
                         <?php if ($filtrando): ?>
-                            <a href="<?php echo link_lista(['q' => null, 'status' => null, 'de' => null, 'ate' => null, 'pagina' => null]); ?>" class="btn-limpar"><?php echo icone('fechar'); ?> Limpar</a>
+                            <a href="<?php echo link_lista(['q' => null, 'status' => null, 'origem' => null, 'de' => null, 'ate' => null, 'pagina' => null]); ?>" class="btn-limpar"><?php echo icone('fechar'); ?> Limpar</a>
                         <?php endif; ?>
                     </form>
 
@@ -196,7 +208,7 @@ $linkNovo = 'pedido_novo.php' . ($clienteFiltro ? '?cliente=' . $clienteFiltro :
                                             <td data-label="Cliente">
                                                 <a href="cliente_ver.php?id=<?php echo $p['CLIENTE_ID']; ?>" class="text-link"><?php echo htmlspecialchars($p['CLIENTE']); ?></a>
                                             </td>
-                                            <td data-label="Registrado por"><?php echo $p['USUARIO'] ? htmlspecialchars($p['USUARIO']) : '<span class="text-muted">—</span>'; ?></td>
+                                            <td data-label="Registrado por"><?php if ($p['ORIGEM'] === 'LOJA'): ?><span class="badge badge-loja"><?php echo icone('loja'); ?> Loja online</span><?php else: ?><?php echo $p['USUARIO'] ? htmlspecialchars($p['USUARIO']) : '<span class="text-muted">—</span>'; ?><?php endif; ?></td>
                                             <td data-label="Status"><?php echo badge_status($p['STATUS']); ?></td>
                                             <td class="num" data-label="Itens"><?php echo (int)$p['ITENS']; ?></td>
                                             <td class="num" data-label="Total"><strong><?php echo moeda((float)$p['TOTAL']); ?></strong></td>

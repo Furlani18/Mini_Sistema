@@ -1,5 +1,16 @@
 <?php
 declare(strict_types=1);
+
+// Endereço principal do sistema: quem não está logado vai para a loja online
+// (ou para o login, se a loja estiver fechada em Configurações).
+require_once __DIR__ . '/sessao.php';
+if (!isset($_SESSION['usuario_id'])) {
+    require_once __DIR__ . '/conexao.php';
+    require_once __DIR__ . '/ui.php';
+    header('Location: ' . (config_ler($pdo, 'loja_ativa', '1') === '1' ? 'loja.php' : 'login.php'));
+    exit;
+}
+
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/conexao.php';
 require_once __DIR__ . '/ui.php';
@@ -21,7 +32,7 @@ $numeros = $pdo->query(
 )->fetch();
 
 $ultimosPedidos = $pdo->query(
-    'SELECT p.ID, p.STATUS, p.CRIADO_EM, c.NOME AS CLIENTE, p.TOTAL
+    'SELECT p.ID, p.STATUS, p.ORIGEM, p.CRIADO_EM, c.NOME AS CLIENTE, p.TOTAL
        FROM vw_pedidos p
       INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
       ORDER BY p.ID DESC
@@ -44,6 +55,11 @@ $projecao = $vendidoMes / $diaHoje * $diasNoMes;
 $pctMeta = $meta > 0 ? $vendidoMes / $meta * 100 : 0;
 $faltaMeta = max(0, $meta - $vendidoMes);
 $diasRestantes = $diasNoMes - $diaHoje + 1; // inclui hoje
+
+// Pedidos feitos pelos clientes na loja online que a equipe ainda não tratou (status Aberto)
+$pedidosLoja = $pdo->query(
+    "SELECT COUNT(*) AS QTD, COALESCE(SUM(TOTAL), 0) AS VALOR FROM vw_pedidos WHERE ORIGEM = 'LOJA' AND STATUS = 'ABERTO'"
+)->fetch();
 
 // Parcelas vencidas (contas a receber)
 $vencidas = $pdo->query(
@@ -144,6 +160,15 @@ $modulos = [
           </div>
         <?php endif; ?>
 
+        <?php if ((int)$pedidosLoja['QTD'] > 0): ?>
+          <div class="alert alert-info alert-loja" role="status">
+            <?php echo icone('loja'); ?>
+            <span><strong><?php echo (int)$pedidosLoja['QTD'] === 1 ? '1 pedido da loja online' : (int)$pedidosLoja['QTD'] . ' pedidos da loja online'; ?></strong>
+              aguardando confirmação (<?php echo moeda((float)$pedidosLoja['VALOR']); ?>).
+              <a href="pedidos.php?origem=LOJA&amp;status=ABERTO" class="text-link">Ver pedidos</a></span>
+          </div>
+        <?php endif; ?>
+
         <?php if ((int)$vencidas['QTD'] > 0): ?>
           <div class="alert alert-warning" role="alert">
             <?php echo icone('dinheiro'); ?>
@@ -221,7 +246,7 @@ $modulos = [
                     <a href="pedido_ver.php?id=<?php echo $p['ID']; ?>" class="painel-item">
                       <span class="painel-principal">
                         <strong>#<?php echo $p['ID']; ?> · <?php echo htmlspecialchars($p['CLIENTE']); ?></strong>
-                        <small><?php echo date('d/m/Y H:i', strtotime($p['CRIADO_EM'])); ?></small>
+                        <small><?php echo date('d/m/Y H:i', strtotime($p['CRIADO_EM'])); ?><?php echo $p['ORIGEM'] === 'LOJA' ? ' · Loja online' : ''; ?></small>
                       </span>
                       <?php echo badge_status($p['STATUS']); ?>
                       <span class="painel-valor"><?php echo moeda((float)$p['TOTAL']); ?></span>

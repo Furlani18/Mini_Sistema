@@ -13,6 +13,7 @@ $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 $stmt = $pdo->prepare(
     'SELECT p.ID, p.STATUS, p.OBSERVACAO, p.CRIADO_EM, p.DESCONTO, p.FORMA_PAGAMENTO, p.SUBTOTAL, p.TOTAL,
+            (SELECT pe.ENTREGA FROM pedidos pe WHERE pe.ID = p.ID) AS ENTREGA,
             c.NOME, c.EMAIL, c.TELEFONE, c.CPF_CNPJ, c.CEP, c.LOGRADOURO, c.NUMERO, c.COMPLEMENTO, c.BAIRRO, c.CIDADE, c.UF,
             u.NOME AS USUARIO
        FROM vw_pedidos p
@@ -146,6 +147,9 @@ $whatsapp = whatsapp_link($pedido['TELEFONE'],
             </table>
         <?php endif; ?>
 
+        <?php if ($pedido['ENTREGA']): ?>
+            <p class="comprovante-obs"><strong>Entrega:</strong> <?php echo htmlspecialchars($pedido['ENTREGA']); ?></p>
+        <?php endif; ?>
         <?php if ($pedido['OBSERVACAO']): ?>
             <p class="comprovante-obs"><strong>Observação:</strong> <?php echo htmlspecialchars($pedido['OBSERVACAO']); ?></p>
         <?php endif; ?>

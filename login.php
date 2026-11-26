@@ -139,6 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <p class="login-hint">
                 Esqueceu a senha? Peça a um administrador do sistema para redefini-la.
             </p>
+            <p class="login-hint"><a href="loja.php" class="text-link">‹ Voltar para a loja online</a></p>
         </div>
     </div>
 </body>

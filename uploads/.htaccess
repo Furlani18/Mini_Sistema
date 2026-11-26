@@ -1,0 +1,22 @@
+# Pasta de fotos enviadas pelo sistema: só imagens podem ser abertas.
+# Nada aqui é executado como PHP, e a listagem de arquivos fica desligada.
+Options -Indexes -ExecCGI
+
+<IfModule php_module>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+<FilesMatch ".+">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^[a-z0-9\-]+\.(jpg|png|webp)$">
+    Require all granted
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
+</IfModule>

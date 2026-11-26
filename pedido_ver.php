@@ -19,10 +19,11 @@ require_once 'financeiro.php';
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 $buscarPedido = $pdo->prepare(
-    'SELECT p.ID, p.STATUS, p.OBSERVACAO, p.CRIADO_EM, p.DESCONTO, p.FORMA_PAGAMENTO, p.SUBTOTAL, p.TOTAL,
+    'SELECT p.ID, p.STATUS, p.ORIGEM, pe.ENTREGA, p.OBSERVACAO, p.CRIADO_EM, p.DESCONTO, p.FORMA_PAGAMENTO, p.SUBTOTAL, p.TOTAL,
             c.ID AS CLIENTE_ID, c.NOME AS CLIENTE, c.EMAIL AS CLIENTE_EMAIL, c.TELEFONE AS CLIENTE_TELEFONE,
             u.NOME AS USUARIO
        FROM vw_pedidos p
+      INNER JOIN pedidos pe ON pe.ID = p.ID
       INNER JOIN clientes c ON c.ID = p.CLIENTE_ID
        LEFT JOIN usuarios u ON u.ID = p.USUARIO_ID
       WHERE p.ID = ?'
@@ -213,6 +214,14 @@ $hoje = date('Y-m-d');
                     </div>
                 </div>
 
+                <?php if ($pedido['ORIGEM'] === 'LOJA' && $pedido['STATUS'] === 'ABERTO'): ?>
+                    <div class="alert alert-info">
+                        <?php echo icone('loja'); ?>
+                        <span>Pedido feito pelo cliente na <strong>loja online</strong>. O estoque já foi reservado.
+                            Confirme com o cliente o pagamento e a entrega e depois atualize o status.</span>
+                    </div>
+                <?php endif; ?>
+
                 <?php if ($ehOrcamento): ?>
                     <div class="alert alert-info">
                         <?php echo icone('documento-texto'); ?>
@@ -231,7 +240,11 @@ $hoje = date('Y-m-d');
                     </div>
                     <div>
                         <dt>Registrado por <small class="text-muted">(tabela usuarios)</small></dt>
-                        <dd><?php echo $pedido['USUARIO'] ? htmlspecialchars($pedido['USUARIO']) : '<span class="text-muted">— (usuário removido)</span>'; ?></dd>
+                        <dd><?php if ($pedido['ORIGEM'] === 'LOJA'): ?>
+                            <span class="badge badge-loja"><?php echo icone('loja'); ?> Loja online</span> <span class="text-muted">feito pelo cliente</span>
+                        <?php else: ?>
+                            <?php echo $pedido['USUARIO'] ? htmlspecialchars($pedido['USUARIO']) : '<span class="text-muted">— (usuário removido)</span>'; ?>
+                        <?php endif; ?></dd>
                     </div>
                     <div>
                         <dt>Data</dt>
@@ -245,6 +258,12 @@ $hoje = date('Y-m-d');
                         <dt>Observação</dt>
                         <dd><?php echo $pedido['OBSERVACAO'] ? htmlspecialchars($pedido['OBSERVACAO']) : '<span class="text-muted">—</span>'; ?></dd>
                     </div>
+                    <?php if ($pedido['ENTREGA']): ?>
+                        <div class="detalhes-largo">
+                            <dt>Entrega</dt>
+                            <dd><?php echo htmlspecialchars($pedido['ENTREGA']); ?></dd>
+                        </div>
+                    <?php endif; ?>
                 </dl>
 
                 <h3 class="section-title"><?php echo icone('pacote'); ?> Itens <small class="text-muted">(tabelas itens_pedido + produtos)</small></h3>

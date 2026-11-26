@@ -165,8 +165,9 @@ function entidades_atividade(): array
  * Grava uma linha no registro de atividades.
  * Ex.: registrar_atividade($pdo, 'APAGOU', "Apagou o cliente 'Ana'", 'cliente', 7);
  * Nunca interrompe a ação principal: se a gravação falhar, apenas ignora.
+ * $autor é o nome gravado quando não há usuário logado (ex.: 'Loja online').
  */
-function registrar_atividade(PDO $pdo, string $acao, string $descricao, ?string $entidade = null, ?int $entidadeId = null): void
+function registrar_atividade(PDO $pdo, string $acao, string $descricao, ?string $entidade = null, ?int $entidadeId = null, ?string $autor = null): void
 {
     try {
         $pdo->prepare(
@@ -174,7 +175,7 @@ function registrar_atividade(PDO $pdo, string $acao, string $descricao, ?string 
              VALUES (?, ?, ?, ?, ?, ?, ?)'
         )->execute([
             $_SESSION['usuario_id'] ?? null,
-            $_SESSION['usuario_nome'] ?? null,
+            $_SESSION['usuario_nome'] ?? $autor,
             $acao,
             $entidade,
             $entidadeId,
